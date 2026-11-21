@@ -16,7 +16,7 @@ at a time, either a view or a file. How the list appears depends on the width:
 | tablet (600–1100 px) | an icon rail beside the page, with ☰ on the rail opening the list with names (`nav=rail`); or the page alone with the drawer, as on a phone (`nav=drawer`) |
 | landscape and desktop | the list as a sidebar |
 
-Opening a file, a view or a focused section is a history entry. The ← and → buttons in the
+Opening a file, a view or a focused section is a history entry. The ‹ and › buttons in the
 header, and the browser's own Back and Forward, move through them, and each place keeps its
 scroll position.
 

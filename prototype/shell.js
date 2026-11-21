@@ -59,8 +59,8 @@ function historyBtns() {
   return h(
     "span",
     { class: "hist" },
-    h("button", { class: "btn icon-btn", title: "Back", "aria-label": "Back", disabled: !back, onclick: () => history.back() }, icon("arrow_back")),
-    h("button", { class: "btn icon-btn", title: "Forward", "aria-label": "Forward", disabled: !fwd, onclick: () => history.forward() }, icon("arrow_forward")),
+    h("button", { class: "btn icon-btn", title: "Back", "aria-label": "Back", disabled: !back, onclick: () => history.back() }, icon("chevron_left")),
+    h("button", { class: "btn icon-btn", title: "Forward", "aria-label": "Forward", disabled: !fwd, onclick: () => history.forward() }, icon("chevron_right")),
   );
 }
 

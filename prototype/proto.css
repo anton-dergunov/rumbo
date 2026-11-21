@@ -212,6 +212,30 @@ body.framed #viewport {
   display: inline-flex;
   flex: none;
 }
+/* Back / forward: narrow chevrons; full height so they stay easy to tap. */
+.hist .btn {
+  min-width: 0;
+  width: 30px;
+  border-radius: 8px;
+}
+.hist .ms {
+  font-size: 22px;
+}
+.size-phone .hist .btn {
+  width: 26px;
+}
+.size-phone .pane-head {
+  gap: 2px;
+  padding-left: 4px;
+  padding-right: 6px;
+}
+.size-phone .pane-head > .btn.icon-btn:first-child {
+  min-width: 36px;
+}
+.size-phone .titlebar {
+  gap: 8px;
+  padding-left: 6px;
+}
 .btn.back {
   color: var(--accent);
 }
