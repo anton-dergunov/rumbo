@@ -19,6 +19,7 @@ const DRIFT = 8; // px a held finger may drift before it counts as a scroll
 const SWIPE_START = 10;
 const SWIPE_RATIO = 1.4;
 const SWIPE_OPEN = 56;
+const SWIPE_BTN_H = 44; // px: the smallest a swipe button gets, whatever the row's height
 const EDGE = 56; // px from the scroller's top or bottom where dragging scrolls
 
 let openSwipe = null;
@@ -293,8 +294,12 @@ export function attachGestures(root, hooks) {
           ),
         ),
       );
-      strip.style.top = `${g.head.offsetTop}px`;
-      strip.style.height = `${g.head.offsetHeight}px`;
+      // At least SWIPE_BTN_H tall, centred on the row, so a one-line row still shows the whole
+      // button (icon and label); the extra height falls in the gap between rows.
+      const hh = g.head.offsetHeight;
+      const sh = Math.max(hh, SWIPE_BTN_H);
+      strip.style.top = `${g.head.offsetTop - (sh - hh) / 2}px`;
+      strip.style.height = `${sh}px`;
       return strip;
     };
     const left = mk("left");

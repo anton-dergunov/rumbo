@@ -31,7 +31,7 @@ Every switch is mirrored in the URL, so any combination can be bookmarked.
 | Theme      | `theme` | `paper` (warm, serif reading; the default), `slate` (cool, all sans), `dusk` (warm dark), `night` (cool dark). The app's Settings also has this. |
 | Tablet nav | `nav`   | `rail` · `drawer` (see the table above) |
 | Data       | `data`  | `real` vault · `sample` synthetic vault in `sample-vault/` |
-| Edit       | `edit`  | how editing is entered: `mode` (edit toggle) · `press` (long-press) · `open` (action row) · `swipe`; see "Editing" below |
+| Edit       | `edit`  | how editing is entered: `mode` (edit toggle) · `press` (long-press) · `swipe`; see "Editing" below |
 
 With `data=sample` the toolbar also has **Sample · reset**, which throws away every edit to the sample.
 
@@ -65,13 +65,12 @@ With `data=sample` the toolbar also has **Sample · reset**, which throws away e
 **Editing** (file view only, never the agenda)
 
 A plain tap still only opens or closes notes. Editing always starts with a deliberate gesture, and
-the `edit` switch picks which one, so the four can be compared on the devices:
+the `edit` switch picks which one, so they can be compared on the devices:
 
 | `edit` | Way in |
 |---|---|
-| `mode` | A pencil in the header turns on edit mode (also the E key). Every row then shows ⋯ (actions) and a drag handle. Tapping a state shape changes the state, tapping a task opens its dialog, and "Add task" / "Add section" rows appear. Done turns it off. |
+| `mode` | A pencil in the header turns on edit mode (also the E key). Every row then shows ⋯ (actions) and a drag handle. Tapping a state shape changes the state, tapping a task opens its dialog, and "Add task" / "Add section" rows appear. Done turns it off. The row at the top of the screen stays where it is when the mode changes. |
 | `press` | Hold a row for about half a second. Let go for the action menu, or move to drag it to a new place. With a mouse, right-click for the menu, or hold and drag. |
-| `open` | Tapping a task opens it with a row of actions under its notes: the six states, A, Edit, Move and ⋯. |
 | `swipe` | Swipe a row right for Done and State, or left for More and Delete. Nothing changes until a button is tapped. |
 
 In every variant, right-clicking a row opens the action menu, and ⌘Z / Ctrl-Z undoes.

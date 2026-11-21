@@ -21,6 +21,7 @@ export function setEditModel(m) {
 }
 /** `fn(notice)` shows a notice: {text, kind, action?: {label, run}, sticky?}. */
 export const onNotice = (fn) => (notify = fn);
+/** `fn(idMap)` draws the page again; idMap takes the old heading ids to the re-parsed ones. */
 export const onRedraw = (fn) => (redraw = fn);
 
 const undoStack = [];
@@ -69,6 +70,7 @@ function remapByKey(path, oldDoc, newDoc) {
   for (const [id, v] of ov) if (idMap.has(id)) next.set(idMap.get(id), v);
   state.overrides.set(path, next);
   if (state.file === path && state.focus) state.focus = idMap.get(state.focus) || null;
+  return idMap;
 }
 
 // ---------------------------------------------------------------- applying
@@ -106,14 +108,14 @@ export function edit(path, label, refs, run, { quiet = false } = {}) {
   if (after === before) return headingAt(file, result.at);
   const oldDoc = file.doc;
   rebuildFile(model, path, after);
-  remap(path, oldDoc, file.doc, result.map);
+  const idMap = remap(path, oldDoc, file.doc, result.map);
   undoStack.push({ label, files: [{ path, before, after }] });
   if (undoStack.length > 20) undoStack.shift();
   if (!journal.has(path)) journal.set(path, []);
   journal.get(path).push({ keys, run });
   queueSave([path]);
   if (!quiet) notify({ text: label, kind: "done", action: { label: "Undo", run: undo } });
-  redraw();
+  redraw(idMap);
   return headingAt(file, result.at);
 }
 
@@ -143,12 +145,13 @@ export function editTwo(srcPath, dstPath, label, srcRefs, dstRefs, take, put) {
     return null;
   }
   const entry = { label, files: [] };
+  const idMap = new Map();
   for (const [f, r] of [[src, a], [dst, b]]) {
     const before = f.text;
     const after = joinLines(r.lines, f.doc.finalNewline || !f.doc.lines.length);
     const oldDoc = f.doc;
     rebuildFile(model, f.path, after);
-    remap(f.path, oldDoc, f.doc, r.map);
+    for (const [k, v] of remap(f.path, oldDoc, f.doc, r.map)) idMap.set(k, v);
     entry.files.push({ path: f.path, before, after });
     // A move between files cannot be re-applied after a conflict; it is reloaded instead.
     if (!journal.has(f.path)) journal.set(f.path, []);
@@ -157,7 +160,7 @@ export function editTwo(srcPath, dstPath, label, srcRefs, dstRefs, take, put) {
   undoStack.push(entry);
   queueSave([srcPath, dstPath]);
   notify({ text: label, kind: "done", action: { label: "Undo", run: undo } });
-  redraw();
+  redraw(idMap);
   return headingAt(dst, b.at);
 }
 
@@ -171,17 +174,18 @@ export function undo() {
       return;
     }
   }
+  const idMap = new Map();
   for (const f of entry.files) {
     const file = model.byPath.get(f.path);
     const oldDoc = file.doc;
     rebuildFile(model, f.path, f.before);
-    remapByKey(f.path, oldDoc, file.doc);
+    for (const [k, v] of remapByKey(f.path, oldDoc, file.doc)) idMap.set(k, v);
     if (!journal.has(f.path)) journal.set(f.path, []);
     journal.get(f.path).push({ keys: null, run: null, restore: f });
   }
   queueSave(entry.files.map((f) => f.path));
   notify({ text: `Undone: ${entry.label.toLowerCase()}`, kind: "done" });
-  redraw();
+  redraw(idMap);
 }
 
 // ---------------------------------------------------------------- saving
@@ -248,6 +252,7 @@ async function save() {
 /** The files changed underneath: apply this page's unsaved edits again to their new text, or reload. */
 function resolveConflicts(conflicts, paths) {
   const lost = [];
+  const idMap = new Map();
   for (const c of conflicts) {
     const file = model.byPath.get(c.path);
     const pending = journal.get(c.path) || [];
@@ -277,11 +282,11 @@ function resolveConflicts(conflicts, paths) {
     const mine = file.text;
     if (ok) {
       rebuildFile(model, c.path, joinLines(doc.lines, doc.finalNewline), c.version);
-      remapByKey(c.path, oldDoc, file.doc);
+      for (const [k, v] of remapByKey(c.path, oldDoc, file.doc)) idMap.set(k, v);
       dirty.add(c.path);
     } else {
       rebuildFile(model, c.path, c.text, c.version);
-      remapByKey(c.path, oldDoc, file.doc);
+      for (const [k, v] of remapByKey(c.path, oldDoc, file.doc)) idMap.set(k, v);
       journal.delete(c.path);
       lost.push({ path: c.path, mine });
     }
@@ -301,7 +306,7 @@ function resolveConflicts(conflicts, paths) {
   } else {
     notify({ text: "The file changed on another device; your change was applied to the new version.", kind: "conflict" });
   }
-  redraw();
+  redraw(idMap);
   save();
 }
 

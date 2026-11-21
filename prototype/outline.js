@@ -6,15 +6,14 @@
 
 import { h, icon, inline, blocks, stateGlyph, prioMark, tagList, planningChips, signal } from "./ui.js";
 import { countSubtree } from "./org.js";
-import { state, update, overridesFor } from "./state.js";
-import { openMenu, openStatePicker, openTaskDialog, openMovePicker, setStateOf, stateRow } from "./edit-ui.js";
+import { state, update, overridesFor, actions } from "./state.js";
+import { openMenu, openStatePicker, openTaskDialog, setStateOf } from "./edit-ui.js";
 import { edit, canUndo, undo } from "./edits.js";
 import { attachGestures } from "./gestures.js";
 import * as E from "./org-edit.js";
 
 // Which way into editing is being tried (the harness switch `edit`), and whether edit mode is on.
 const editMode = () => state.edit === "mode" && state.editing;
-const actsVariant = () => state.edit === "open";
 
 const countCache = new WeakMap();
 const countsOf = (hd) => {
@@ -52,23 +51,10 @@ function applyFold(el, hd, ov) {
     el._bodyBuilt = true;
     el.querySelector(":scope > .body").append(blocks(hd.blocks));
   }
-  // The "open row" variant: a task opened by a tap shows a slim row of actions under its notes.
-  if (actsVariant() && hd.state) {
-    const on = ov.get(hd.id) === "open";
-    el.classList.toggle("acts-on", on);
-    const box = el.querySelector(":scope > .acts");
-    if (on && box && !box.childElementCount) box.append(actsRow(el._file, hd, el));
-  }
 }
 
 function toggle(el, hd, path) {
   const ov = overridesFor(path);
-  if (actsVariant() && hd.state) {
-    // A tap opens the task with its action row, and the next tap closes it.
-    ov.set(hd.id, ov.get(hd.id) === "open" ? "shut" : "open");
-    applyFold(el, hd, ov);
-    return;
-  }
   const hasBody = hd.blocks.length > 0;
   const hasKids = hd.children.length > 0;
   if (!hasBody && !hasKids) return;
@@ -150,23 +136,6 @@ function buildKids(el, hd, ov) {
 const addRow = (file, hd) =>
   h("button", { class: "add-row", onclick: () => openTaskDialog({ file, ref: hd, where: "lastChild", kind: "task" }) }, icon("add"), h("span", null, "Add task"));
 
-/** The "open row" variant's actions under an opened task: the states, A, edit, move, more. */
-function actsRow(file, hd, el) {
-  return h(
-    "div",
-    { class: "acts-row" },
-    stateRow(hd.state, (s) => s !== hd.state && setStateOf(file, hd, s)),
-    h(
-      "div",
-      { class: "acts-btns" },
-      h("button", { class: `chip${hd.priority === "A" ? " on" : ""}`, title: "High priority", "aria-pressed": hd.priority === "A" ? "true" : "false", onclick: () => edit(file.path, hd.priority === "A" ? "Priority cleared" : "Marked high priority", { hd }, (l, d, r) => E.setPriority(l, r.hd, hd.priority === "A" ? null : "A")) }, h("span", { class: "prio", "data-p": "A" }, "A")),
-      h("button", { class: "chip", onclick: () => openTaskDialog({ file, hd }) }, icon("edit"), "Edit"),
-      h("button", { class: "chip", onclick: () => openMovePicker(file, hd) }, icon("drive_file_move"), "Move"),
-      h("button", { class: "chip", title: "More", "aria-label": "More", onclick: (e) => openMenu(file, hd, { anchor: e.currentTarget }) }, icon("more_horiz")),
-    ),
-  );
-}
-
 /** Gesture hooks for this file: the menu, drops and swipe buttons. */
 function gestureHooks(file) {
   const headingOf = (node) => model.headingById.get(node.dataset.id)?.heading || null;
@@ -201,10 +170,10 @@ function gestureHooks(file) {
 /** The header's way into edit mode (the "mode" variant only): a pencil, then Done and Undo. */
 export function editToggle() {
   if (state.edit !== "mode") return null;
-  if (!state.editing) return h("button", { class: "btn icon-btn edit-toggle", title: "Edit (E)", "aria-label": "Edit", onclick: () => update({ editing: true }) }, icon("edit"));
+  if (!state.editing) return h("button", { class: "btn icon-btn edit-toggle", title: "Edit (E)", "aria-label": "Edit", onclick: () => actions.setEditing(true) }, icon("edit"));
   return [
     h("button", { class: "btn icon-btn", title: "Undo (⌘Z)", "aria-label": "Undo", disabled: !canUndo() || null, onclick: () => undo() }, icon("undo")),
-    h("button", { class: "btn done-btn", onclick: () => update({ editing: false }) }, "Done"),
+    h("button", { class: "btn done-btn", onclick: () => actions.setEditing(false) }, "Done"),
   ];
 }
 
@@ -217,7 +186,6 @@ function nodeEl(hd, file, ov, depth) {
   el._file = file;
   el._depth = depth;
   el.append(headEl(hd, file, el), h("div", { class: "body" }));
-  if (actsVariant() && task) el.append(h("div", { class: "acts" }));
   el.append(h("div", { class: "kids" }));
   // In edit mode an empty section still offers "Add task".
   if (editMode() && !task && !hd.children.length) {

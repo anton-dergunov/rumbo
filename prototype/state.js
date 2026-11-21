@@ -7,12 +7,12 @@ export const VARIANTS = {
   nav: ["rail", "drawer"], // tablet portrait: icon rail beside the page, or the page alone with a drawer
   data: ["real", "sample"],
   // How editing is entered, to compare on the devices: a header toggle that turns on edit mode,
-  // long-press (right-click), an action row on a task opened by a tap, or swipe actions.
-  edit: ["mode", "press", "open", "swipe"],
+  // long-press (right-click), or swipe actions.
+  edit: ["mode", "press", "swipe"],
 };
 
 export const LABELS = {
-  edit: { mode: "edit mode", press: "long-press", open: "open row", swipe: "swipe" },
+  edit: { mode: "edit mode", press: "long-press", swipe: "swipe" },
   frame: { none: "window", ipad11p: 'iPad 11" ▯', ipad11l: 'iPad 11" ▭', minip: "iPad mini ▯", minil: "iPad mini ▭", phone: "phone" },
 };
 

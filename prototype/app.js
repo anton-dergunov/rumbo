@@ -97,15 +97,45 @@ actions.openView = (view) => update({ view, focus: null, drawer: false, sheet: n
 
 actions.reveal = (id) => reveal(id);
 
-// After an edit the page is drawn again in place: the file pane keeps its exact scroll position even
-// when the focused section's id changed with the re-parse.
-onRedraw(() => {
-  const sc = appRoot.querySelector(".file-pane .pane-scroll");
-  const top = sc?.scrollTop;
-  update();
-  const after = appRoot.querySelector(".file-pane .pane-scroll");
-  if (after && top != null) after.scrollTop = top;
-});
+// Redraws that change the page's height above the reader (turning edit mode on or off, an edit) keep
+// the row at the top of the file page where it was: same row, same distance from the top edge.
+// A plain scrollTop would land somewhere else once "Add task" rows appear or titles wrap differently.
+function fileScroller() {
+  return appRoot.querySelector(".file-pane .pane-scroll");
+}
+const frameScale = () => viewport.getBoundingClientRect().width / viewport.offsetWidth || 1;
+
+function topAnchor() {
+  const sc = fileScroller();
+  if (!sc) return null;
+  const top = sc.getBoundingClientRect().top;
+  for (const head of sc.querySelectorAll(".node > .head")) {
+    const r = head.getBoundingClientRect();
+    if (r.height && r.bottom > top + 1) return { id: head.parentElement.dataset.id, offset: (r.top - top) / frameScale(), scrollTop: sc.scrollTop };
+  }
+  return { id: null, offset: 0, scrollTop: sc.scrollTop };
+}
+
+function restoreAnchor(a, idMap = null) {
+  const sc = fileScroller();
+  if (!sc || !a) return;
+  const id = a.id && idMap ? idMap.get(a.id) : a.id;
+  const head = id && sc.querySelector(`.node[data-id="${id}"] > .head`);
+  if (!head) {
+    sc.scrollTop = a.scrollTop;
+    return;
+  }
+  sc.scrollTop += (head.getBoundingClientRect().top - sc.getBoundingClientRect().top) / frameScale() - a.offset;
+}
+
+function anchored(fn, idMap) {
+  const a = topAnchor();
+  fn();
+  restoreAnchor(a, idMap);
+}
+
+actions.setEditing = (on) => anchored(() => update({ editing: on }));
+onRedraw((idMap) => anchored(() => update(), idMap));
 
 actions.openHeading = (path, id) => {
   actions.openFile(path);
@@ -127,10 +157,10 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key.toLowerCase() === "e" && !e.metaKey && !e.ctrlKey && !e.altKey && !typing(e) && state.view === "file" && state.edit === "mode") {
-    update({ editing: !state.editing });
+    actions.setEditing(!state.editing);
     return;
   }
-  if (e.key === "Escape" && state.editing && !state.sheet && !state.drawer) update({ editing: false });
+  if (e.key === "Escape" && state.editing && !state.sheet && !state.drawer) actions.setEditing(false);
   if (e.key === "Escape" && (state.sheet || state.drawer)) update({ sheet: null, drawer: false });
   if (e.key === "Tab" && e.shiftKey) {
     e.preventDefault();

@@ -1635,7 +1635,8 @@ hr {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 2px;
+  line-height: 1;
   color: var(--on-accent);
   font: 600 11.5px var(--font-ui);
 }
@@ -1654,39 +1655,6 @@ hr {
 }
 .sw-del {
   background: var(--prio-a);
-}
-
-/* the "open row" variant */
-.node > .acts:empty,
-.node:not(.acts-on) > .acts {
-  display: none;
-}
-.acts-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 4px 0 12px calc(var(--slot) + var(--gap) - 4px);
-  padding: 6px;
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--rule-soft);
-  font-family: var(--font-ui);
-}
-.acts-row .st-row {
-  flex: 1 1 320px;
-  gap: 2px;
-}
-.acts-row .st-btn {
-  min-height: 46px;
-}
-.acts-row .st-name {
-  font-size: 11px;
-}
-.acts-btns {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
 }
 
 /* ------------------------------------------------------------ the editing layer */
