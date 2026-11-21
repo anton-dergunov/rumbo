@@ -106,29 +106,12 @@ body.framed #viewport {
   display: flex;
   background: var(--bg);
 }
-.shell-tabs,
-.shell-home {
-  flex-direction: column;
-}
 .shell .main {
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-.split {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-.split > .tree-pane {
-  width: 300px;
-  flex: none;
-  border-right: 1px solid var(--rule-soft);
-}
-.size-portrait .split > .tree-pane {
-  width: 250px;
 }
 .pane {
   display: flex;
@@ -144,36 +127,24 @@ body.framed #viewport {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
-.pane-head,
-.topbar {
+.pane-head {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-height: 54px;
-  padding: 6px 12px;
+  padding: 6px 10px;
   padding-top: max(6px, env(safe-area-inset-top));
   border-bottom: 1px solid var(--rule-soft);
   background: var(--bg);
 }
-.topbar.center {
-  justify-content: center;
-}
 .spacer {
   flex: 1;
 }
-.shell-panes > .tree-pane {
-  width: 250px;
+.side-pane {
+  width: 260px;
   flex: none;
   border-right: 1px solid var(--rule-soft);
-}
-.shell-panes > .agenda-pane {
-  width: 440px;
-  flex: none;
-  border-left: 1px solid var(--rule-soft);
-}
-.shell-panes.size-wide > .agenda-pane {
-  width: 410px;
 }
 .rail-pane {
   width: 64px;
@@ -183,30 +154,11 @@ body.framed #viewport {
 .file-pane .pane-scroll {
   background: var(--surface);
 }
-.tabbar {
-  flex: none;
-  border-top: 1px solid var(--rule-soft);
-  background: var(--bg);
-  padding: 6px 10px max(6px, env(safe-area-inset-bottom));
-}
-.tabbar .seg {
-  width: 100%;
-  background: none;
-}
-.tabbar .seg button {
-  flex: 1;
-  flex-direction: column;
-  height: 52px;
-  gap: 2px;
-  font-size: 11.5px;
-}
-.tabbar .seg button .ms {
-  font-size: 24px;
-}
-.tabbar .seg button.on {
-  background: none;
-  box-shadow: none;
-  color: var(--accent);
+.view-title {
+  font: 600 17px var(--font-read);
+  color: var(--ink);
+  padding-left: 4px;
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------------ controls */
@@ -231,11 +183,10 @@ body.framed #viewport {
   padding: 0;
 }
 .btn.back {
-  padding-left: 2px;
   color: var(--accent);
 }
 .btn.back .ms {
-  font-size: 26px;
+  font-size: 22px;
 }
 .seg {
   display: inline-flex;
@@ -264,17 +215,22 @@ body.framed #viewport {
   color: var(--ink);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.1);
 }
-.seg.icons button span:not(.ms),
-.size-phone .seg.group button span:not(.ms),
-.shell-panes > .agenda-pane .seg.group button span:not(.ms) {
+.size-phone .seg.group button span:not(.ms) {
   display: none;
 }
-.seg.icons button,
 .seg.group button {
   padding: 0 10px;
 }
-.size-phone .seg.fold button {
-  padding: 0 9px;
+.fold-cycle,
+.size-phone .seg.fold {
+  display: none;
+}
+.size-phone .fold-cycle {
+  display: inline-flex;
+  padding: 0 8px;
+}
+.fold-cycle .ms {
+  font-size: 19px;
 }
 
 .pane-crumb {
@@ -284,31 +240,42 @@ body.framed #viewport {
   font: 500 13.5px var(--font-ui);
   color: var(--ink-3);
 }
-.size-phone .pane-crumb,
-.shell-tabs.size-portrait .pane-crumb {
-  display: none;
-}
 .crumbs {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   min-width: 0;
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
 }
-.crumbs > span {
+.crumbs > * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .crumbs .cr {
   flex: 0 1 auto;
-  min-width: 2em;
+  min-width: 2.5em;
 }
 .crumbs .sep {
   color: var(--ink-4);
   flex: none;
+  padding: 0 2px;
+}
+button.cr,
+button.cr-file {
+  min-height: 36px;
+  padding: 0 5px;
+  border-radius: 7px;
+  color: var(--ink-3);
+}
+button.cr:active,
+button.cr-file:active {
+  background: var(--sunk);
+}
+.crumbs > :last-child {
+  color: var(--ink-2);
 }
 .cr-file {
   display: inline-flex;
@@ -320,6 +287,12 @@ body.framed #viewport {
 .cr-file .ms {
   font-size: 17px;
   color: var(--accent);
+}
+/* On a phone: the file icon and only the innermost section. */
+.size-phone .cr-file .t,
+.size-phone .crumbs > .cr:not(:last-child),
+.size-phone .crumbs > .sep:not(:nth-last-child(2)) {
+  display: none;
 }
 .vault-chip {
   display: inline-flex;
@@ -336,6 +309,9 @@ body.framed #viewport {
   color: var(--ink-3);
   font-style: italic;
   padding: 24px 0;
+}
+.empty.pad {
+  padding: 24px;
 }
 .muted {
   color: var(--ink-3);
@@ -464,6 +440,10 @@ body.framed #viewport {
   justify-content: center;
   flex: none;
 }
+.legend .legend-focus {
+  font-size: 18px;
+  color: var(--ink-3);
+}
 .legend .more {
   display: inline-block;
   font-size: 17px;
@@ -504,28 +484,6 @@ body.framed #viewport {
 }
 .glyph[data-s="DONE"] {
   background: var(--ink-4);
-}
-
-/* "labels" marks: the state also as a word in the right margin */
-.slabel {
-  display: none;
-  font: 600 13.5px/1 var(--font-ui);
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-  color: var(--ink-3);
-}
-.marks-labels .slabel {
-  display: inline;
-}
-.slabel[data-s="NEXT"] {
-  color: var(--st-next);
-}
-.slabel[data-s="INPR"] {
-  color: var(--st-inpr);
-}
-.slabel[data-s="WAIT"] {
-  color: var(--st-wait);
 }
 
 .prio {
@@ -781,6 +739,19 @@ hr {
 .tfolder:first-child {
   margin-top: 4px;
 }
+.legend-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin-top: 18px;
+  padding: 0 12px;
+  font: 13px var(--font-ui);
+  color: var(--ink-3);
+}
+.legend-link .ms {
+  font-size: 17px;
+}
 .tfolder.loose {
   margin-top: 18px;
   padding-top: 10px;
@@ -996,9 +967,6 @@ hr {
 .ticon .ms {
   font-size: 19px;
 }
-.icons-off .ticon {
-  display: none;
-}
 .more {
   font-size: 0.85em;
   margin-left: 6px;
@@ -1103,11 +1071,7 @@ hr {
 .sect > .kids {
   margin-left: var(--indent);
 }
-.outline-guides .sect > .kids {
-  margin-left: 3px;
-  padding-left: calc(var(--indent) - 3px);
-  border-left: 1px solid var(--rule-soft);
-}
+
 
 /* Tasks: the state slot is the same width for every state, so titles line up. */
 .task > .head {
@@ -1132,21 +1096,17 @@ hr {
   padding: 8px 12px 120px;
 }
 .ag-date {
-  font: 600 16px var(--font-read);
-  color: var(--ink);
+  font: 14px var(--font-ui);
+  color: var(--ink-3);
   white-space: nowrap;
+  padding-left: 6px;
 }
 .ag-date .short,
-.size-phone .ag-date .long,
-.shell-panes > .agenda-pane .ag-date .long {
+.size-phone .ag-date .long {
   display: none;
 }
-.size-phone .ag-date .short,
-.shell-panes > .agenda-pane .ag-date .short {
+.size-phone .ag-date .short {
   display: inline;
-}
-.shell-panes > .agenda-pane .ag-date {
-  padding-left: 4px;
 }
 .ag-sample {
   margin: 8px 8px 0;
@@ -1204,7 +1164,7 @@ hr {
                            where it lives · tags */
 .ag-row {
   display: grid;
-  grid-template-columns: 34px 12px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   column-gap: 11px;
   row-gap: 3px;
   align-items: start;
@@ -1237,11 +1197,6 @@ hr {
 .ag-icon.blank {
   background: none;
 }
-.ag-glyph {
-  height: 1.42em;
-  display: flex;
-  align-items: center;
-}
 .ag-title {
   line-height: 1.42;
   color: var(--ink);
@@ -1257,7 +1212,7 @@ hr {
   height: 1.42em;
 }
 .ag-meta {
-  grid-column: 3 / span 2;
+  grid-column: 2 / span 2;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1283,7 +1238,7 @@ hr {
   display: block;
 }
 .ag-detail {
-  padding: 4px 14px 12px 74px;
+  padding: 4px 14px 12px 53px;
   font-family: var(--font-read);
   font-size: calc(var(--fs-read) - 1px);
   line-height: var(--lh-read);

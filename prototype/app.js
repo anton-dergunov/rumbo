@@ -1,6 +1,6 @@
 // Entry point: load the vault, wire actions, and redraw on every state change.
 
-import { state, readUrl, setRenderer, update, actions, FRAMES } from "./state.js";
+import { state, readUrl, setRenderer, update, actions, restoreFromUrl, FRAMES } from "./state.js";
 import { loadVault } from "./data.js";
 import { setModel, h } from "./ui.js";
 import { setOutlineModel, reveal } from "./outline.js";
@@ -29,7 +29,7 @@ function applyFrame() {
   document.documentElement.dataset.theme = state.theme;
   const dark = state.theme === "dusk" || state.theme === "night";
   document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || (dark ? "#000" : "#fff");
-  viewport.className = `marks-${state.marks} outline-${state.outline} icons-${state.icons}`;
+  viewport.className = "";
 }
 
 function pickDefaultFile() {
@@ -81,12 +81,8 @@ function render() {
   }
 }
 
-actions.openFile = (path) => {
-  const narrow = ["phone", "portrait"].includes(sizeClass(viewportWidth()));
-  const patch = { file: path, focus: null, drawer: false, sheet: null };
-  if (state.shell === "home" || state.shell === "tabs" || narrow) patch.view = "file";
-  update(patch);
-};
+actions.openFile = (path) => update({ view: "file", file: path, focus: null, drawer: false, sheet: null });
+actions.openView = (view) => update({ view, focus: null, drawer: false, sheet: null });
 
 actions.openHeading = (path, id) => {
   actions.openFile(path);
@@ -96,6 +92,7 @@ actions.openHeading = (path, id) => {
 readUrl();
 if (window.innerWidth < 700 && state.frame === "none" && !new URLSearchParams(location.search).has("harness")) state.harness = false;
 setRenderer(render);
+window.addEventListener("popstate", restoreFromUrl);
 let resizeRaf = 0;
 window.addEventListener("resize", () => (resizeRaf ||= requestAnimationFrame(() => ((resizeRaf = 0), render()))));
 document.addEventListener("keydown", (e) => {

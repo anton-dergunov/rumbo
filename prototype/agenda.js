@@ -2,7 +2,7 @@
 // Each task is a two-line row: the title, then where it lives. "By file" groups the same rows
 // under their files.
 
-import { h, icon, inline, blocks, stateGlyph, stateLabel, prioMark, tagList, planningChips, crumbs } from "./ui.js";
+import { h, icon, inline, blocks, prioMark, tagList, planningChips, crumbs } from "./ui.js";
 import { state, update, actions } from "./state.js";
 
 const SECTION_ICONS = { high: "priority_high", inpr: "progress_activity", next: "arrow_forward" };
@@ -35,9 +35,10 @@ function detail(item) {
   );
 }
 
-function row(model, item, grouped) {
+// No state mark on a row: the section already says it. Priority shows only outside "High priority".
+function row(model, item, grouped, sec) {
   const { heading: hd, file } = item;
-  const tIcon = state.icons === "right" ? model.taskIcon(hd) : null;
+  const tIcon = model.taskIcon(hd);
   const square = grouped ? tIcon : tIcon || file.icon;
   const el = h("div", { class: `ag-item${state.agendaOpen.has(hd.id) ? " open" : ""}` });
   el.append(
@@ -45,9 +46,8 @@ function row(model, item, grouped) {
       "button",
       { class: "ag-row", onclick: () => toggleRow(hd.id, el) },
       h("span", { class: `ag-icon${square ? "" : " blank"}` }, square ? icon(square) : null),
-      h("span", { class: "ag-glyph" }, stateGlyph(hd.state)),
       h("span", { class: "ag-title" }, inline(hd.title), hd.blocks.length ? icon("notes", "more") : null),
-      h("span", { class: "aside" }, stateLabel(hd.state), prioMark(hd.priority)),
+      h("span", { class: "aside" }, sec.key === "high" ? null : prioMark(hd.priority)),
       h("span", { class: "ag-meta" }, crumbs(hd, { file: grouped ? null : file }), planningChips(hd.planning), tagList(hd.tags)),
     ),
     detail(item),
@@ -56,7 +56,7 @@ function row(model, item, grouped) {
 }
 
 function sectionBody(model, sec) {
-  if (state.group !== "file") return h("div", { class: "ag-list" }, sec.items.map((it) => row(model, it, false)));
+  if (state.group !== "file") return h("div", { class: "ag-list" }, sec.items.map((it) => row(model, it, false, sec)));
   const groups = new Map();
   for (const it of sec.items) {
     if (!groups.has(it.file)) groups.set(it.file, []);
@@ -70,18 +70,19 @@ function sectionBody(model, sec) {
         "div",
         { class: "ag-group" },
         h("button", { class: "ag-gh", onclick: () => actions.openFile(file.path) }, icon(file.icon), h("span", null, file.name), h("span", { class: "n" }, items.length)),
-        items.map((it) => row(model, it, true)),
+        items.map((it) => row(model, it, true, sec)),
       ),
     ),
   );
 }
 
-/** Header items for the agenda pane: the date, the List / By file toggle and the legend. */
+/** Header items for the agenda: its name, today's date and the List / By file toggle. */
 export function agendaTools() {
   const today = new Date();
   const long = today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const short = today.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
   return [
+    h("span", { class: "view-title" }, "Agenda"),
     h("span", { class: "ag-date" }, h("span", { class: "long" }, long), h("span", { class: "short" }, short)),
     h("span", { class: "spacer" }),
     h(
@@ -91,7 +92,6 @@ export function agendaTools() {
         h("button", { class: state.group === k ? "on" : "", title: label, onclick: () => update({ group: k }) }, icon(ic), h("span", null, label)),
       ),
     ),
-    h("button", { class: "btn icon-btn", title: "What the marks mean", "aria-label": "Legend", onclick: () => update({ sheet: "legend" }) }, icon("info")),
   ];
 }
 

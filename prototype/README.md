@@ -4,51 +4,66 @@ Static HTML and ES modules with no build step, served by `serve.py` (Python stan
 only). Every design alternative uses the same data and the same theme tokens. The floating
 toolbar in the bottom-right corner switches between them; it is part of the prototype only.
 
+## Layout
+
+There is one navigation list: **Views** first, then the vault's folders and files. Only the
+Agenda view exists so far; calendar and situation views will join it. The main area shows one thing
+at a time, either a view or a file. How the list appears depends on the width:
+
+| Width | Navigation |
+|---|---|
+| phone (< 600 px) | ☰ opens the list as a drawer |
+| tablet (600–1100 px) | an icon rail beside the page, with ☰ on the rail opening the list with names (`nav=rail`); or the page alone with the drawer, as on a phone (`nav=drawer`) |
+| landscape and desktop | the list as a sidebar |
+
+Opening a file, a view or a focused section is a history entry, so the browser's Back and Forward
+work.
+
 ## Switches
 
 Tap a toolbar button to move to the next option. Right-click or long-press it to move back.
 Every switch is mirrored in the URL, so any combination can be bookmarked.
 
-| Switch     | URL key   | Options |
-|------------|-----------|---------|
-| Frame      | `frame`   | `none` (real window), `ipad11p` 834×1210, `ipad11l` 1210×834, `minip` 744×1133, `minil` 1133×744, `phone` 412×915 |
-| Theme      | `theme`   | `paper` (warm, serif reading; the default), `slate` (cool, all sans), `dusk` (warm dark), `night` (cool dark) |
-| Shell      | `shell`   | `panes`: file list, file and agenda side by side. Narrower screens fold the list to an icon rail, then put File and Agenda behind a switch. `tabs`: Agenda and Files tabs. `home`: the agenda is home and files open from a drawer. |
-| Sections   | `outline` | `indent`: nested sections step in a little. `guides`: the same, with a faint line down each level. |
-| States     | `marks`   | `shapes`: a shape in a fixed slot, so titles always line up. `labels`: the same shapes, plus the state as a word in the right margin. |
-| Task icons | `icons`   | `right`: task icons in the right margin of the outline and in the agenda's icon square · `off` |
-| Data       | `data`    | `real` vault · `sample` synthetic vault in `sample-vault/` |
+| Switch     | URL key | Options |
+|------------|---------|---------|
+| Frame      | `frame` | `none` (real window), `ipad11p` 834×1210, `ipad11l` 1210×834, `minip` 744×1133, `minil` 1133×744, `phone` 412×915 |
+| Theme      | `theme` | `paper` (warm, serif reading; the default), `slate` (cool, all sans), `dusk` (warm dark), `night` (cool dark) |
+| Tablet nav | `nav`   | `rail` · `drawer` (see the table above) |
+| Data       | `data`  | `real` vault · `sample` synthetic vault in `sample-vault/` |
 
-**State shapes:**
-
-| Shape | State |
-|---|---|
-| empty ring | to do |
-| filled dot | next |
-| half-filled dot | in progress |
-| pause bars | waiting |
-| dashed ring | maybe |
-
-The ⓘ button in the agenda header shows this legend in the app. High priority is an outlined **A** in the right margin.
-
-### In the app (not prototype switches)
+## In the app
 
 **File view**
-- **Fold depth:** Sections, Tasks and All work like Org's Shift-Tab; Shift-Tab on a keyboard cycles them.
+- **Fold depth:** Sections, Tasks and All work like Org's Shift-Tab; Shift-Tab on a keyboard cycles them. On a phone it is one button that cycles.
 - **One heading:** tapping a heading opens or closes just that heading.
-- **Focus:** the › button on a section narrows the page to that section, with a breadcrumb back (URL key `focus`).
+- **Focus:** the › button on a section narrows the page to that section.
+  - The ← button goes up one level.
+  - Every part of the breadcrumb in the header can be tapped: the file returns to the whole file, and a section focuses on that section.
 - **Contents:** the contents button lists the top sections, for jumping around a long file.
+- **State shapes:**
+
+  | Shape | State |
+  |---|---|
+  | empty ring | to do |
+  | filled dot | next |
+  | half-filled dot | in progress |
+  | pause bars | waiting |
+  | dashed ring | maybe |
+
+- **Right margin:** an outlined **A** for high priority, and the task's icon.
+- **Legend:** "What the marks mean" at the bottom of the navigation list.
 
 **Agenda**
-- The pane header shows today's date.
+- **Sections:** High priority, In progress and Next up.
+- **Rows:** no state mark and no **A** where the section already says it. Tapping a row shows its notes, and "Open in …" jumps to the task in its file.
 - **List / By file:** groups the same rows under their files (URL key `group`).
-- **Rows:** tapping a row shows its notes, and "Open in …" jumps to the task in its file.
 
 **Other URL keys**
-- `file`: vault-relative path of the open file.
+- `view`: `agenda` or `file`.
+- `file`: vault-relative path.
+- `focus`: id of the focused section.
 - `fold`: `overview` / `tasks` / `all`.
-- `view`: `agenda` / `files` / `file`, for single-pane layouts.
-- `harness=0`: hides the toolbar. On a phone-sized window it starts hidden behind a ⚙ button.
+- `harness=0`: hides the toolbar.
 
 ## Data rules
 

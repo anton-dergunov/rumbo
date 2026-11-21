@@ -4,7 +4,7 @@
 import { h } from "./ui.js";
 import { state, update, VARIANTS, LABELS } from "./state.js";
 
-const NAMES = { frame: "Frame", theme: "Theme", shell: "Shell", outline: "Sections", marks: "States", icons: "Task icons", data: "Data" };
+const NAMES = { frame: "Frame", theme: "Theme", nav: "Tablet nav", data: "Data" };
 
 function cycle(key, dir) {
   const list = VARIANTS[key];

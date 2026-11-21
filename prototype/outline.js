@@ -4,7 +4,7 @@
 // heading opens or closes that heading alone, on top of the file-wide depth. A section can also be
 // focused (like org-narrow-to-subtree): the page then shows only that section, with a breadcrumb.
 
-import { h, icon, inline, blocks, stateGlyph, stateLabel, prioMark, tagList, planningChips, signal, crumbs } from "./ui.js";
+import { h, icon, inline, blocks, stateGlyph, prioMark, tagList, planningChips, signal } from "./ui.js";
 import { countSubtree } from "./org.js";
 import { state, update, overridesFor } from "./state.js";
 
@@ -65,7 +65,7 @@ function headEl(hd, file, el) {
   const hasKids = hd.children.length > 0;
   const tIcon = task ? model.taskIcon(hd) : null;
   const aside = task
-    ? h("span", { class: "aside" }, stateLabel(hd.state), prioMark(hd.priority), h("span", { class: "ticon" }, tIcon ? icon(tIcon) : null))
+    ? h("span", { class: "aside" }, prioMark(hd.priority), h("span", { class: "ticon" }, tIcon ? icon(tIcon) : null))
     : hasKids
       ? h(
           "span",
@@ -167,34 +167,66 @@ export function renderOutline(file) {
 
 // ---------------------------------------------------------------- toolbar, breadcrumb, contents
 
+const FOLD_LABELS = { overview: "Sections", tasks: "Tasks", all: "All" };
+const FOLD_ICONS = { overview: "unfold_less", tasks: "format_list_bulleted", all: "unfold_more" };
+
+function setFold(k) {
+  state.overrides.delete(state.file);
+  update({ fold: k });
+}
+
+/** Fold depth: a three-way control, or on a phone one button that cycles through the three. */
 export function foldControl() {
-  const labels = { overview: "Sections", tasks: "Tasks", all: "All" };
-  return h(
-    "div",
-    { class: "seg fold", role: "group", "aria-label": "Fold depth" },
-    Object.entries(labels).map(([k, v]) =>
-      h(
-        "button",
-        {
-          class: state.fold === k ? "on" : "",
-          onclick: () => {
-            state.overrides.delete(state.file);
-            update({ fold: k });
-          },
-        },
-        v,
-      ),
+  const order = Object.keys(FOLD_LABELS);
+  return [
+    h(
+      "div",
+      { class: "seg fold", role: "group", "aria-label": "Fold depth" },
+      order.map((k) => h("button", { class: state.fold === k ? "on" : "", onclick: () => setFold(k) }, FOLD_LABELS[k])),
     ),
-  );
+    h(
+      "button",
+      { class: "btn fold-cycle", title: "Fold depth", onclick: () => setFold(order[(order.indexOf(state.fold) + 1) % order.length]) },
+      icon(FOLD_ICONS[state.fold]),
+      FOLD_LABELS[state.fold],
+    ),
+  ];
 }
 
 export function contentsButton() {
   return h("button", { class: "btn icon-btn", title: "Contents", "aria-label": "Contents", onclick: () => update({ sheet: "contents" }) }, icon("toc"));
 }
 
-/** Keep `crumbEl` showing the section the reader is in. */
+/** Go to a level of the file: null = the whole file, else focus on that section. */
+export function goTo(id) {
+  if (id === state.focus) {
+    document.querySelector(".file-pane .pane-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  update({ focus: id });
+}
+
+/** One level up from the focused section (to the whole file at the top). */
+export function goUp() {
+  const entry = state.focus && model.headingById.get(state.focus);
+  if (!entry) return;
+  const parent = entry.heading.path[entry.heading.path.length - 1];
+  update({ focus: parent ? parent.id : null });
+}
+
+function crumbTrail(file, hd) {
+  const out = h("div", { class: "crumbs" });
+  out.append(h("button", { class: "cr-file", onclick: () => goTo(null) }, icon(file.icon), h("span", { class: "t" }, file.title)));
+  for (const p of hd ? [...hd.path, hd] : []) {
+    out.append(h("span", { class: "sep" }, "›"), h("button", { class: "cr", onclick: () => goTo(p.id) }, inline(p.title)));
+  }
+  return out;
+}
+
+/** Keep `crumbEl` showing where the reader is: the file, the focused section, then the section in view. */
 export function trackSection(scrollEl, crumbEl, file) {
   let raf = 0;
+  let last = "";
   const run = () => {
     raf = 0;
     const top = scrollEl.getBoundingClientRect().top + 8;
@@ -206,11 +238,11 @@ export function trackSection(scrollEl, crumbEl, file) {
       if (r.top <= top) current = hEl.parentElement;
       else break;
     }
-    crumbEl.replaceChildren();
-    const focus = focusedHeading(file);
-    const hd = current ? model.headingById.get(current.dataset.id).heading : focus;
-    if (!hd) crumbEl.append(h("span", { class: "cr-file" }, icon(file.icon), file.title));
-    else crumbEl.append(crumbs({ path: [...hd.path, hd] }, { file }));
+    const hd = current ? model.headingById.get(current.dataset.id).heading : focusedHeading(file);
+    const key = hd ? hd.id : "";
+    if (key === last && crumbEl.firstChild) return;
+    last = key;
+    crumbEl.replaceChildren(crumbTrail(file, hd));
   };
   scrollEl.addEventListener("scroll", () => (raf ||= requestAnimationFrame(run)), { passive: true });
   run();

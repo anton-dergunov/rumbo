@@ -183,12 +183,6 @@ export function stateGlyph(s) {
   return h("i", { class: "glyph", "data-s": s, title: STATE_NAMES[s] || s });
 }
 
-/** The state as a word for the right margin ("labels" marks only). TODO gets no word. */
-export function stateLabel(s) {
-  if (!s || s === "TODO") return null;
-  return h("span", { class: "slabel", "data-s": s }, (STATE_NAMES[s] || s).toLowerCase());
-}
-
 export function legend() {
   const row = (mark, text) => h("div", { class: "legend-row" }, h("span", { class: "legend-mark" }, mark), h("span", null, text));
   return h(
@@ -196,8 +190,9 @@ export function legend() {
     { class: "legend" },
     ["TODO", "NEXT", "INPR", "WAIT", "MAYB"].map((s) => row(stateGlyph(s), STATE_NAMES[s])),
     row(prioMark("A"), "High priority"),
-    row(icon("notes", "more"), "Has notes — tap the task to read them"),
-    row(h("span", { class: "signal" }, h("span", { class: "sg", "data-s": "NEXT" }, h("i"), "2")), "Counts in the file list: in progress, high priority, next"),
+    row(icon("notes", "more"), "Has notes: tap the task to read them"),
+    row(icon("chevron_right", "legend-focus"), "Focus on one section; the back arrow or the breadcrumb returns"),
+    row(h("span", { class: "signal" }, h("span", { class: "sg", "data-s": "NEXT" }, h("i"), "2")), "Counts beside a file: in progress, high priority, next"),
   );
 }
 

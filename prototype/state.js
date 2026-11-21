@@ -4,10 +4,7 @@
 export const VARIANTS = {
   frame: ["none", "ipad11p", "ipad11l", "minip", "minil", "phone"],
   theme: ["paper", "slate", "dusk", "night"],
-  shell: ["panes", "tabs", "home"],
-  outline: ["indent", "guides"],
-  marks: ["shapes", "labels"],
-  icons: ["right", "off"],
+  nav: ["rail", "drawer"], // tablet portrait: icon rail beside the page, or the page alone with a drawer
   data: ["real", "sample"],
 };
 
@@ -28,14 +25,11 @@ export const FOLDS = ["overview", "tasks", "all"];
 export const state = {
   frame: "none",
   theme: "paper",
-  shell: "panes",
-  outline: "indent",
-  marks: "shapes",
-  icons: "right",
+  nav: "rail",
   data: "real",
   fold: "tasks",
   file: null, // vault-relative path of the open file
-  view: "agenda", // single-pane contexts: "agenda" | "files" | "file"
+  view: "agenda", // what the main area shows: a view ("agenda"; later calendar, situations) or "file"
   focus: null, // id of the section the file view is narrowed to (null = whole file)
   group: "list", // agenda: "list" | "file"
   drawer: false,
@@ -61,7 +55,7 @@ export function readUrl() {
   if (p.get("harness") === "0") state.harness = false;
 }
 
-export function writeUrl() {
+export function writeUrl(push = false) {
   const p = new URLSearchParams();
   for (const k of URL_KEYS) {
     const v = state[k];
@@ -69,7 +63,9 @@ export function writeUrl() {
     p.set(k, v);
   }
   if (!state.harness) p.set("harness", "0");
-  history.replaceState(null, "", `${location.pathname}?${p.toString().replace(/%2F/g, "/")}`);
+  const url = `${location.pathname}?${p.toString().replace(/%2F/g, "/")}`;
+  if (push) history.pushState(null, "", url);
+  else history.replaceState(null, "", url);
 }
 
 let renderer = () => {};
@@ -77,9 +73,18 @@ export function setRenderer(fn) {
   renderer = fn;
 }
 
+// Moving to another file, view or focus is a history entry, so Back and Forward work.
+const NAV_KEYS = ["view", "file", "focus"];
 export function update(patch = {}) {
+  const moved = NAV_KEYS.some((k) => k in patch && patch[k] !== state[k]);
   Object.assign(state, patch);
-  writeUrl();
+  writeUrl(moved);
+  renderer();
+}
+
+export function restoreFromUrl() {
+  Object.assign(state, { view: "agenda", focus: null, sheet: null, drawer: false });
+  readUrl();
   renderer();
 }
 
