@@ -7,6 +7,14 @@
 import { h, icon, inline, blocks, stateGlyph, prioMark, tagList, planningChips, signal } from "./ui.js";
 import { countSubtree } from "./org.js";
 import { state, update, overridesFor } from "./state.js";
+import { openMenu, openStatePicker, openTaskDialog, openMovePicker, setStateOf, stateRow } from "./edit-ui.js";
+import { edit, canUndo, undo } from "./edits.js";
+import { attachGestures } from "./gestures.js";
+import * as E from "./org-edit.js";
+
+// Which way into editing is being tried (the harness switch `edit`), and whether edit mode is on.
+const editMode = () => state.edit === "mode" && state.editing;
+const actsVariant = () => state.edit === "open";
 
 const countCache = new WeakMap();
 const countsOf = (hd) => {
@@ -44,10 +52,23 @@ function applyFold(el, hd, ov) {
     el._bodyBuilt = true;
     el.querySelector(":scope > .body").append(blocks(hd.blocks));
   }
+  // The "open row" variant: a task opened by a tap shows a slim row of actions under its notes.
+  if (actsVariant() && hd.state) {
+    const on = ov.get(hd.id) === "open";
+    el.classList.toggle("acts-on", on);
+    const box = el.querySelector(":scope > .acts");
+    if (on && box && !box.childElementCount) box.append(actsRow(el._file, hd, el));
+  }
 }
 
 function toggle(el, hd, path) {
   const ov = overridesFor(path);
+  if (actsVariant() && hd.state) {
+    // A tap opens the task with its action row, and the next tap closes it.
+    ov.set(hd.id, ov.get(hd.id) === "open" ? "shut" : "open");
+    applyFold(el, hd, ov);
+    return;
+  }
   const hasBody = hd.blocks.length > 0;
   const hasKids = hd.children.length > 0;
   if (!hasBody && !hasKids) return;
@@ -64,35 +85,41 @@ function headEl(hd, file, el) {
   const hasBody = hd.blocks.length > 0;
   const hasKids = hd.children.length > 0;
   // Task icons are shown in the agenda only; in a file the right margin holds just the priority.
-  const aside = task
-    ? hd.priority
-      ? h("span", { class: "aside" }, prioMark(hd.priority))
-      : null
-    : hasKids
-      ? h(
-          "span",
-          { class: "aside" },
-          h(
-            "button",
-            {
-              class: "focus-btn",
-              title: "Focus on this section",
-              "aria-label": "Focus on this section",
-              onclick: (e) => {
-                e.stopPropagation();
-                update({ focus: hd.id });
-              },
-            },
-            icon("chevron_right"),
-          ),
-        )
-      : null;
+  const focusBtn = !task && hasKids
+    ? h(
+        "button",
+        {
+          class: "focus-btn",
+          title: "Focus on this section",
+          "aria-label": "Focus on this section",
+          onclick: (e) => {
+            e.stopPropagation();
+            update({ focus: hd.id });
+          },
+        },
+        icon("chevron_right"),
+      )
+    : null;
+  const editing = editMode();
+  const marks = [task ? prioMark(hd.priority) : focusBtn];
+  if (editing) {
+    marks.push(
+      h("button", { class: "more-btn", title: "Actions", "aria-label": "Actions", onclick: (e) => (e.stopPropagation(), openMenu(file, hd, { anchor: e.currentTarget })) }, icon("more_horiz")),
+      h("span", { class: "handle", title: "Drag to move", "aria-label": "Drag to move" }, icon("drag_indicator")),
+    );
+  }
+  const aside = marks.some(Boolean) ? h("span", { class: "aside" }, marks) : null;
   return h(
     "div",
     {
       class: "head",
       onclick: (e) => {
-        if (e.target.closest("a, button")) return;
+        if (e.target.closest("a, button, .handle")) return;
+        if (editMode() && task) {
+          // In edit mode a tap on the shape changes the state, and a tap on the task edits it.
+          if (e.target.closest(".slot")) return openStatePicker(file, hd, e.target.closest(".slot"));
+          return openTaskDialog({ file, hd });
+        }
         toggle(el, hd, file.path);
       },
     },
@@ -115,17 +142,88 @@ function buildKids(el, hd, ov) {
   el._kidsBuilt = true;
   const box = el.querySelector(":scope > .kids");
   for (const c of hd.children) box.append(nodeEl(c, el._file, ov, el._depth + 1));
+  if (editMode() && !hd.state) box.append(addRow(el._file, hd));
+}
+
+// ---------------------------------------------------------------- editing pieces
+
+const addRow = (file, hd) =>
+  h("button", { class: "add-row", onclick: () => openTaskDialog({ file, ref: hd, where: "lastChild", kind: "task" }) }, icon("add"), h("span", null, "Add task"));
+
+/** The "open row" variant's actions under an opened task: the states, A, edit, move, more. */
+function actsRow(file, hd, el) {
+  return h(
+    "div",
+    { class: "acts-row" },
+    stateRow(hd.state, (s) => s !== hd.state && setStateOf(file, hd, s)),
+    h(
+      "div",
+      { class: "acts-btns" },
+      h("button", { class: `chip${hd.priority === "A" ? " on" : ""}`, title: "High priority", "aria-pressed": hd.priority === "A" ? "true" : "false", onclick: () => edit(file.path, hd.priority === "A" ? "Priority cleared" : "Marked high priority", { hd }, (l, d, r) => E.setPriority(l, r.hd, hd.priority === "A" ? null : "A")) }, h("span", { class: "prio", "data-p": "A" }, "A")),
+      h("button", { class: "chip", onclick: () => openTaskDialog({ file, hd }) }, icon("edit"), "Edit"),
+      h("button", { class: "chip", onclick: () => openMovePicker(file, hd) }, icon("drive_file_move"), "Move"),
+      h("button", { class: "chip", title: "More", "aria-label": "More", onclick: (e) => openMenu(file, hd, { anchor: e.currentTarget }) }, icon("more_horiz")),
+    ),
+  );
+}
+
+/** Gesture hooks for this file: the menu, drops and swipe buttons. */
+function gestureHooks(file) {
+  const headingOf = (node) => model.headingById.get(node.dataset.id)?.heading || null;
+  return {
+    headingOf,
+    menu: (hd, node, point) => hd && openMenu(file, hd, { point }),
+    drop: (hd, t) => {
+      if (!hd || !t.target || t.target === hd) return;
+      edit(file.path, "Moved", { hd, t: t.target }, (l, d, r) => E.moveSubtree(l, r.hd, t.how === "into" ? { into: r.t, at: "first" } : { [t.how]: r.t }));
+    },
+    swipeActions: (hd, side) => {
+      if (!hd) return [];
+      const task = !!hd.state;
+      if (side === "left") {
+        return task
+          ? [
+              hd.state === "DONE"
+                ? { icon: "undo", label: "To do", cls: "sw-todo", run: () => setStateOf(file, hd, "TODO") }
+                : { icon: "check", label: "Done", cls: "sw-done", run: () => setStateOf(file, hd, "DONE") },
+              { icon: "radio_button_checked", label: "State", cls: "sw-state", run: () => openStatePicker(file, hd, document.querySelector(`.node[data-id="${hd.id}"] > .head .slot`)) },
+            ]
+          : [{ icon: "add", label: "Task", cls: "sw-state", run: () => openTaskDialog({ file, ref: hd, where: "lastChild", kind: "task" }) }];
+      }
+      return [
+        { icon: "more_horiz", label: "More", cls: "sw-more", run: () => openMenu(file, hd, { anchor: document.querySelector(`.node[data-id="${hd.id}"] > .head`) }) },
+        { icon: "delete", label: "Delete", cls: "sw-del", run: () => (task ? edit(file.path, "Task deleted", { hd }, (l, d, r) => E.deleteSubtree(l, r.hd)) : openMenu(file, hd, {})) },
+      ];
+    },
+  };
+}
+
+/** The header's way into edit mode (the "mode" variant only): a pencil, then Done and Undo. */
+export function editToggle() {
+  if (state.edit !== "mode") return null;
+  if (!state.editing) return h("button", { class: "btn icon-btn edit-toggle", title: "Edit (E)", "aria-label": "Edit", onclick: () => update({ editing: true }) }, icon("edit"));
+  return [
+    h("button", { class: "btn icon-btn", title: "Undo (⌘Z)", "aria-label": "Undo", disabled: !canUndo() || null, onclick: () => undo() }, icon("undo")),
+    h("button", { class: "btn done-btn", onclick: () => update({ editing: false }) }, "Done"),
+  ];
 }
 
 function nodeEl(hd, file, ov, depth) {
   const task = !!hd.state;
   const el = h("section", {
-    class: `node d-${Math.min(depth, 5)} ${task ? "task" : "sect"}${hd.blocks.length ? " has-body" : ""}${hd.children.length ? " has-kids" : " leaf"}`,
+    class: `node d-${Math.min(depth, 5)} ${task ? "task" : "sect"}${hd.state === "DONE" ? " done" : ""}${hd.blocks.length ? " has-body" : ""}${hd.children.length ? " has-kids" : " leaf"}`,
     "data-id": hd.id,
   });
   el._file = file;
   el._depth = depth;
-  el.append(headEl(hd, file, el), h("div", { class: "body" }), h("div", { class: "kids" }));
+  el.append(headEl(hd, file, el), h("div", { class: "body" }));
+  if (actsVariant() && task) el.append(h("div", { class: "acts" }));
+  el.append(h("div", { class: "kids" }));
+  // In edit mode an empty section still offers "Add task".
+  if (editMode() && !task && !hd.children.length) {
+    el._kidsBuilt = true;
+    el.querySelector(":scope > .kids").append(addRow(file, hd));
+  }
   applyFold(el, hd, ov);
   return el;
 }
@@ -143,7 +241,7 @@ export function focusedHeading(file) {
 export function renderOutline(file) {
   const ov = overridesFor(file.path);
   const focus = focusedHeading(file);
-  const root = h("article", { class: `doc fold-${state.fold}${focus ? " focused" : ""}`, "data-path": file.path });
+  const root = h("article", { class: `doc fold-${state.fold}${focus ? " focused" : ""} g-${state.edit}${editMode() ? " editing" : ""}`, "data-path": file.path });
   const list = h("div", { class: "nodes" });
   if (focus) {
     if (!ov.has(focus.id)) ov.set(focus.id, "open");
@@ -155,6 +253,14 @@ export function renderOutline(file) {
     if (!file.doc.children.length) list.append(h("p", { class: "empty" }, "No headings in this file yet."));
   }
   root.append(list);
+  if (editMode()) {
+    list.append(
+      focus
+        ? h("button", { class: "add-row add-sect", onclick: () => openTaskDialog({ file, ref: focus, where: "lastChild", kind: "section" }) }, icon("add"), h("span", null, "Add subsection"))
+        : h("button", { class: "add-row add-sect", onclick: () => openTaskDialog({ file, ref: null, where: "end", kind: "section" }) }, icon("add"), h("span", null, "Add section")),
+    );
+  }
+  attachGestures(root, gestureHooks(file));
   return root;
 }
 

@@ -3,8 +3,9 @@
 
 import { h } from "./ui.js";
 import { state, update, VARIANTS, LABELS } from "./state.js";
+import { resetSample } from "./edits.js";
 
-const NAMES = { frame: "Frame", theme: "Theme", nav: "Tablet nav", data: "Data" };
+const NAMES = { frame: "Frame", theme: "Theme", nav: "Tablet nav", data: "Data", edit: "Edit" };
 
 function cycle(key, dir) {
   const list = VARIANTS[key];
@@ -40,6 +41,16 @@ export function renderHarness() {
         },
         h("span", { class: "k" }, NAMES[key]),
         h("span", { class: "v" }, label),
+      ),
+    );
+  }
+  if (state.data === "sample") {
+    root.append(
+      h(
+        "button",
+        { title: "Copy the committed sample vault over the edited working copy", onclick: () => confirm("Throw away every edit to the sample vault?") && resetSample() },
+        h("span", { class: "k" }, "Sample"),
+        h("span", { class: "v" }, "reset"),
       ),
     );
   }

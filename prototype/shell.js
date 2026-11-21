@@ -8,7 +8,7 @@
 import { h, icon, legend } from "./ui.js";
 import { state, update, canGoBack, canGoForward } from "./state.js";
 import { renderNav, renderRail } from "./tree.js";
-import { renderOutline, foldControl, contentsButton, crumbTrail, focusedHeading, renderContents, closeBtn } from "./outline.js";
+import { renderOutline, foldControl, contentsButton, crumbTrail, focusedHeading, renderContents, closeBtn, editToggle } from "./outline.js";
 import { renderAgenda, agendaTools } from "./agenda.js";
 
 const THEMES = [
@@ -77,6 +77,7 @@ function filePane(model, menu) {
     h("span", { class: "spacer" }),
     foldControl(),
     contentsButton(),
+    editToggle(),
   ];
   return pane("file-pane", head, renderOutline(file), `file:${file.path}:${state.focus || ""}`);
 }

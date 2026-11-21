@@ -6,9 +6,13 @@ export const VARIANTS = {
   theme: ["paper", "slate", "dusk", "night"],
   nav: ["rail", "drawer"], // tablet portrait: icon rail beside the page, or the page alone with a drawer
   data: ["real", "sample"],
+  // How editing is entered, to compare on the devices: a header toggle that turns on edit mode,
+  // long-press (right-click), an action row on a task opened by a tap, or swipe actions.
+  edit: ["mode", "press", "open", "swipe"],
 };
 
 export const LABELS = {
+  edit: { mode: "edit mode", press: "long-press", open: "open row", swipe: "swipe" },
   frame: { none: "window", ipad11p: 'iPad 11" ▯', ipad11l: 'iPad 11" ▭', minip: "iPad mini ▯", minil: "iPad mini ▭", phone: "phone" },
 };
 
@@ -27,6 +31,8 @@ export const state = {
   theme: "paper",
   nav: "rail",
   data: "real",
+  edit: "mode",
+  editing: false, // edit mode is on (the "mode" variant); kept in the URL but not a history entry
   fold: "tasks",
   file: null, // vault-relative path of the open file
   view: "agenda", // what the main area shows: a view ("agenda"; later calendar, situations) or "file"
@@ -41,7 +47,7 @@ export const state = {
   agendaShut: new Set(), // collapsed agenda sections
 };
 
-const URL_KEYS = [...Object.keys(VARIANTS), "fold", "file", "view", "focus", "group"];
+const URL_KEYS = [...Object.keys(VARIANTS), "fold", "file", "view", "focus", "group", "editing"];
 
 export function readUrl() {
   const p = new URLSearchParams(location.search);
@@ -50,7 +56,7 @@ export function readUrl() {
     if (v == null) continue;
     if (VARIANTS[k] && !VARIANTS[k].includes(v)) continue;
     if (k === "fold" && !FOLDS.includes(v)) continue;
-    state[k] = v;
+    state[k] = k === "editing" ? v === "1" : v;
   }
   if (p.get("harness") === "0") state.harness = false;
 }
@@ -64,7 +70,7 @@ export const canGoForward = () => navIdx < navMax;
 export function writeUrl(push = false) {
   const p = new URLSearchParams();
   for (const k of URL_KEYS) {
-    const v = state[k];
+    const v = k === "editing" ? (state.editing ? "1" : "") : state[k];
     if (v == null || v === "") continue;
     p.set(k, v);
   }
@@ -93,7 +99,7 @@ export function update(patch = {}) {
 
 export function restoreFromUrl(event) {
   navIdx = event?.state?.idx ?? 0;
-  Object.assign(state, { view: "agenda", focus: null, sheet: null, drawer: false });
+  Object.assign(state, { view: "agenda", focus: null, sheet: null, drawer: false, editing: false });
   readUrl();
   renderer();
 }

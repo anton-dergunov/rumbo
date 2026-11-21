@@ -18,6 +18,18 @@ Most to least important:
 7. **Tags**, from the fixed vocabulary in `workspace.org` (`ps/context-tags`, with meanings).
 8. **SCHEDULED / DEADLINE**: occasional, mostly for meetings.
 
+## The owner's answers (2026-11-21)
+
+- **Where:** in file views only, never in the agenda. Phone and tablet first, and it should also work with a mouse, for a later macOS menu-bar app.
+- **What is common:** small changes: the state, deleting a task, priority, tags, the title and notes, SCHEDULED and DEADLINE. Typing long new text is rarer; that is done on the computer.
+- **DONE is not delete.** Marking a task done keeps it in place, drawn faint. It stays until the owner deletes it; "Remove done tasks" on a section clears them in one go.
+- **Explicit entry:** viewing comes first, and a tap must never start editing. All four ways in are built behind the harness switch `edit`, to compare on the devices.
+- **A dialog** for editing a task and adding a new one; **dragging** to reorder.
+- **Saving:** the sample vault only for now, with the conflict check. Real-vault edits stay on the page.
+- **Code reuse** from the owner's calorie-logger (gestures, drop logic, month calendar) and carrel (keyboard fitting, tag picker, save loop) is welcome.
+
+Still open for the owner: which way in to keep, maybe more than one.
+
 ## Hard constraints
 
 - **Keep every byte that wasn't edited.** beorg and Orgzly strip blank lines and trailing whitespace. That is the owner's main complaint, and the Emacs config has a whole tool to recover from it (`agentic-org-planner/design/editing/blank-line-recovery.md`).

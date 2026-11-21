@@ -189,6 +189,7 @@ export function legend() {
     "div",
     { class: "legend" },
     ["TODO", "NEXT", "INPR", "WAIT", "MAYB"].map((s) => row(stateGlyph(s), STATE_NAMES[s])),
+    row(stateGlyph("DONE"), "Done: kept, drawn faint, until you delete it"),
     row(prioMark("A"), "High priority"),
     row(icon("notes", "more"), "Has notes: tap the task to read them"),
     row(icon("chevron_right", "legend-focus"), "Focus on one section; tap the file name in the header to return"),

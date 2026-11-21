@@ -6,14 +6,14 @@
 
 export const OPEN_STATES = ["TODO", "NEXT", "INPR", "WAIT", "MAYB"];
 export const DONE_STATES = ["DONE"];
-const ALL_STATES = new Set([...OPEN_STATES, ...DONE_STATES]);
+export const ALL_STATES = new Set([...OPEN_STATES, ...DONE_STATES]);
 
 const HEADING_RE = /^(\*+)[ \t]+(.*)$/;
 const PRIORITY_RE = /^\[#([A-Z0-9])\][ \t]*/;
 const TAGS_RE = /[ \t]+(:(?:[\w@#%]+:)+)[ \t]*$/;
 const KEYWORD_RE = /^[ \t]*#\+([A-Za-z_]+):[ \t]*(.*)$/;
 const PLANNING_RE = /^[ \t]*(SCHEDULED|DEADLINE|CLOSED):/;
-const STAMP_RE = /(SCHEDULED|DEADLINE|CLOSED):[ \t]*([<[])(\d{4})-(\d{2})-(\d{2})(?:[ \t]+[A-Za-z]{2,3}\.?)?(?:[ \t]+(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?)?(?:[ \t]+[.+-]+\d+[hdwmy](?:\/\d+[hdwmy])?)*[>\]]/g;
+const STAMP_RE = /(SCHEDULED|DEADLINE|CLOSED):[ \t]*([<[])(\d{4})-(\d{2})-(\d{2})(?:[ \t]+[A-Za-z]{2,3}\.?)?(?:[ \t]+(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?)?((?:[ \t]+[.+-]+\d+[hdwmy](?:\/\d+[hdwmy])?)*)[>\]]/g;
 const BEGIN_RE = /^[ \t]*#\+begin_(\w+)(?:[ \t]+(.*))?$/i;
 const DRAWER_RE = /^[ \t]*:([\w-]+):[ \t]*$/;
 const LIST_RE = /^([ \t]*)([-+]|[ \t]+\*|\d+[.)])[ \t]+(?:\[([ xX-])\][ \t]+)?(.*)$/;
@@ -56,6 +56,7 @@ export function parsePlanning(line) {
       date: `${m[3]}-${m[4]}-${m[5]}`,
       time: m[6] || null,
       end: m[7] || null,
+      repeat: (m[8] || "").trim() || null,
       raw: m[0].slice(m[0].indexOf(m[2])),
     };
     leftover = leftover.replace(m[0], "");
@@ -175,7 +176,7 @@ export function parseBlocks(lines) {
 
 /**
  * Parse a whole file.
- * Returns {keywords, preamble, children, headings, lines}. Each heading:
+ * Returns {keywords, preamble, children, headings, lines, finalNewline, hasCR}. Each heading:
  *   {id, level, state, priority, title, tags, planning, blocks, children, parent,
  *    line, bodyStart, bodyEnd, end, path}
  * Line numbers are 0-based; `end` is exclusive and covers the whole subtree.
@@ -183,6 +184,8 @@ export function parseBlocks(lines) {
 export function parseOrg(text, opts = {}) {
   const states = opts.states ? new Set(opts.states) : ALL_STATES;
   const idPrefix = opts.idPrefix || "h";
+  const hasCR = text.includes("\r");
+  const finalNewline = text.endsWith("\n");
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   if (lines.length && lines[lines.length - 1] === "") lines.pop();
 
@@ -257,6 +260,8 @@ export function parseOrg(text, opts = {}) {
     children: root.children,
     headings,
     lines,
+    finalNewline, // whether the text ended with a newline, so a save writes it back the same way
+    hasCR, // CR line endings: such a file is shown but never written (the lines lost the CRs)
   };
 }
 

@@ -31,6 +31,9 @@ Every switch is mirrored in the URL, so any combination can be bookmarked.
 | Theme      | `theme` | `paper` (warm, serif reading; the default), `slate` (cool, all sans), `dusk` (warm dark), `night` (cool dark). The app's Settings also has this. |
 | Tablet nav | `nav`   | `rail` · `drawer` (see the table above) |
 | Data       | `data`  | `real` vault · `sample` synthetic vault in `sample-vault/` |
+| Edit       | `edit`  | how editing is entered: `mode` (edit toggle) · `press` (long-press) · `open` (action row) · `swipe`; see "Editing" below |
+
+With `data=sample` the toolbar also has **Sample · reset**, which throws away every edit to the sample.
 
 ## In the app
 
@@ -59,12 +62,34 @@ Every switch is mirrored in the URL, so any combination can be bookmarked.
 - **Rows:** no state mark and no **A** where the section already says it. Tapping a row shows its notes, and "Open in …" jumps to the task in its file.
 - **List / By file:** groups the same rows under their files (URL key `group`).
 
+**Editing** (file view only, never the agenda)
+
+A plain tap still only opens or closes notes. Editing always starts with a deliberate gesture, and
+the `edit` switch picks which one, so the four can be compared on the devices:
+
+| `edit` | Way in |
+|---|---|
+| `mode` | A pencil in the header turns on edit mode (also the E key). Every row then shows ⋯ (actions) and a drag handle. Tapping a state shape changes the state, tapping a task opens its dialog, and "Add task" / "Add section" rows appear. Done turns it off. |
+| `press` | Hold a row for about half a second. Let go for the action menu, or move to drag it to a new place. With a mouse, right-click for the menu, or hold and drag. |
+| `open` | Tapping a task opens it with a row of actions under its notes: the six states, A, Edit, Move and ⋯. |
+| `swipe` | Swipe a row right for Done and State, or left for More and Delete. Nothing changes until a button is tapped. |
+
+In every variant, right-clicking a row opens the action menu, and ⌘Z / Ctrl-Z undoes.
+
+- **Action menu:** the six states (one tap each), priority, tags, scheduled, deadline, Edit…, Add task below (for a section: add a task, a section or a subsection), Move…, Up / Down, Promote / Demote, Remove done tasks (sections) and Delete. A section asks before it is deleted; a task is deleted at once, with Undo.
+- **Dialog:** the title, state, priority, dates, tags (from the vocabulary in `workspace.org`, with their meanings) and the notes as the raw Org text, kept exactly as typed. The same dialog adds a new task or section.
+- **Move…:** Up, Down, Promote, Demote, or to the end of any section of any file.
+- **DONE:** a done task stays where it is, drawn faint, until it is deleted.
+- **Undo:** the toast after each edit offers Undo, and ⌘Z / Ctrl-Z goes back further (the last 20 edits).
+- **Saving:** each edit is saved at once, and only to the sample vault's working copy. If the file changed on disk since it was read, the edit is applied again to the new text; if its heading is gone, the file is reloaded and the toast says so. With `data=real`, edits stay on the page and are never written.
+
 **Other URL keys**
 - `view`: `agenda` or `file`.
 - `file`: vault-relative path.
 - `focus`: id of the focused section.
 - `fold`: `overview` / `tasks` / `all`.
 - `harness=0`: hides the toolbar.
+- `editing=1`: edit mode is on (the `mode` variant).
 
 ## Data rules
 
@@ -72,10 +97,17 @@ Every switch is mirrored in the URL, so any combination can be bookmarked.
 - Only `.org` files that pass the same exclusions as Emacs are served. Excluded: `init.org`,
   `workspace.org`, conflicted copies, dot folders, `Journal/` and `Archive/`.
 - `sample-vault/` is a synthetic copy of the Emacs config's `samples/realistic` vault.
+- Edits to the sample go to `.sample-work/`, a gitignored copy that `serve.py` makes from
+  `sample-vault/` when it starts. The committed sample is never written. The real vault is
+  read-only in the prototype.
 
 ## Files
 
 - `org.js`: the Org parser. It is pure and keeps each heading's line span for later edits.
+- `org-edit.js`: the edits, as span edits on the raw lines; every other line stays byte-identical.
+- `edits.js`: applies an edit to the model, keeps undo, saves, and handles a file changed underneath.
+- `edit-ui.js`: the action menu, dialog, pickers and toast, in a layer the page redraws never touch.
+- `gestures.js`: long-press, swipe, and drag to reorder with auto-scroll.
 - `inline.js`: inline markup.
 - `workspace.js`: reads `workspace.org`.
 - `data.js`: builds the model.

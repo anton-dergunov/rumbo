@@ -10,6 +10,44 @@ async function get(url, kind) {
   return kind === "json" ? res.json() : res.text();
 }
 
+/** A file's text and the version a save must match (the server's ETag). */
+export async function getFile(data, path) {
+  const res = await fetch(`/api/file?data=${data === "sample" ? "sample" : "real"}&path=${encodeURIComponent(path)}`);
+  if (!res.ok) throw new Error(`${path}: ${res.status}`);
+  return { text: await res.text(), version: (res.headers.get("ETag") || "").replace(/"/g, "") };
+}
+
+/** Parse one file's text into the file object the views read. `i` keeps heading ids stable per file. */
+function buildFile(f, i, text, version, ws) {
+  const doc = parseOrg(text, { states: [...OPEN_STATES, "DONE"], idPrefix: `f${i}h` });
+  const topFolder = f.folder.split("/")[0];
+  return {
+    ...f,
+    index: i,
+    text,
+    version,
+    doc,
+    title: doc.keywords.TITLE && !/->/.test(doc.keywords.TITLE) ? doc.keywords.TITLE : f.name,
+    subtitle: doc.keywords.SUBTITLE || "",
+    icon: ws.folderContentIcons[f.folder] || ws.folderContentIcons[topFolder] || ws.fileIcons[f.base] || "draft",
+    counts: countSubtree(doc.children),
+  };
+}
+
+/**
+ * Replace one file's text in the model after an edit or a reload: re-parse it and refresh every
+ * index that points into it. The file object is updated in place, so views holding it stay valid.
+ */
+export function rebuildFile(model, path, text, version) {
+  const file = model.byPath.get(path);
+  for (const h of file.doc.headings) model.headingById.delete(h.id);
+  const fresh = buildFile(file, file.index, text, version ?? file.version, model.ws);
+  Object.assign(file, fresh);
+  for (const h of file.doc.headings) model.headingById.set(h.id, { file, heading: h });
+  model.agenda = agendaSections(model.files);
+  return file;
+}
+
 export async function loadVault(data) {
   const q = data === "sample" ? "data=sample" : "data=real";
   const [vault, wsText, iconCache] = await Promise.all([
@@ -18,22 +56,12 @@ export async function loadVault(data) {
     get(`/api/task-icons?${q}`, "json").catch(() => ({})),
   ]);
   const ws = parseWorkspace(wsText);
-  const texts = await Promise.all(vault.files.map((f) => get(`/api/file?${q}&path=${encodeURIComponent(f.path)}`, "text")));
+  const texts = await Promise.all(vault.files.map((f) => getFile(data, f.path)));
 
   const headingById = new Map();
   const files = vault.files.map((f, i) => {
-    const doc = parseOrg(texts[i], { states: [...OPEN_STATES, "DONE"], idPrefix: `f${i}h` });
-    for (const h of doc.headings) headingById.set(h.id, { file: null, heading: h });
-    const topFolder = f.folder.split("/")[0];
-    const file = {
-      ...f,
-      doc,
-      title: doc.keywords.TITLE && !/->/.test(doc.keywords.TITLE) ? doc.keywords.TITLE : f.name,
-      subtitle: doc.keywords.SUBTITLE || "",
-      icon: ws.folderContentIcons[f.folder] || ws.folderContentIcons[topFolder] || ws.fileIcons[f.base] || "draft",
-      counts: countSubtree(doc.children),
-    };
-    for (const h of doc.headings) headingById.get(h.id).file = file;
+    const file = buildFile(f, i, texts[i].text, texts[i].version, ws);
+    for (const h of file.doc.headings) headingById.set(h.id, { file, heading: h });
     return file;
   });
 
@@ -51,7 +79,9 @@ export async function loadVault(data) {
 
   return {
     name: vault.name,
+    data,
     sample: vault.sample,
+    writable: !!vault.writable, // only the sample working copy is saved; real-vault edits stay in memory
     ws,
     files,
     folders,

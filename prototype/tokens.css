@@ -42,6 +42,12 @@
   --radius: 12px;
   --shadow: 0 1px 2px rgb(60 45 20 / 0.06), 0 6px 20px rgb(60 45 20 / 0.06);
   --stage: #d9d3c7;
+  /* editing: text on the accent colour, the toast, the backdrop behind dialogs */
+  --on-accent: #fbf8f2;
+  --toast-bg: #2b2620;
+  --toast-ink: #f4efe5;
+  --toast-act: #9fd3c9;
+  --scrim: rgb(40 30 15 / 0.32);
 }
 
 [data-theme="slate"] {
@@ -84,6 +90,12 @@
   --radius: 10px;
   --shadow: 0 1px 2px rgb(20 30 50 / 0.06), 0 6px 18px rgb(20 30 50 / 0.06);
   --stage: #cfd3da;
+  /* editing: text on the accent colour, the toast, the backdrop behind dialogs */
+  --on-accent: #ffffff;
+  --toast-bg: #1b1f25;
+  --toast-ink: #f2f3f5;
+  --toast-act: #a9bbff;
+  --scrim: rgb(15 20 30 / 0.32);
 }
 
 [data-theme="dusk"] {
@@ -126,6 +138,12 @@
   --radius: 12px;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.25);
   --stage: #0f0d0b;
+  /* editing: text on the accent colour, the toast, the backdrop behind dialogs */
+  --on-accent: #1b1712;
+  --toast-bg: #efe6d8;
+  --toast-ink: #1b1712;
+  --toast-act: #2e6a64;
+  --scrim: rgb(0 0 0 / 0.5);
 }
 
 [data-theme="night"] {
@@ -168,4 +186,10 @@
   --radius: 10px;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.3);
   --stage: #08090b;
+  /* editing: text on the accent colour, the toast, the backdrop behind dialogs */
+  --on-accent: #0e1114;
+  --toast-bg: #e3e7ec;
+  --toast-ink: #121519;
+  --toast-act: #3156c8;
+  --scrim: rgb(0 0 0 / 0.55);
 }
