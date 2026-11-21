@@ -11,6 +11,36 @@ import { renderNav, renderRail } from "./tree.js";
 import { renderOutline, foldControl, contentsButton, trackSection, renderContents, closeBtn, goUp } from "./outline.js";
 import { renderAgenda, agendaTools } from "./agenda.js";
 
+const THEMES = [
+  ["paper", "Paper", "Warm, serif text"],
+  ["slate", "Slate", "Cool, sans-serif"],
+  ["dusk", "Dusk", "Warm dark"],
+  ["night", "Night", "Cool dark"],
+];
+
+/** Settings: only the theme for now; more will join it. */
+function settingsSheet() {
+  return h(
+    "div",
+    { class: "sheet settings-sheet" },
+    h("div", { class: "sheet-head" }, h("strong", null, "Settings"), h("span", { class: "muted" }), closeBtn()),
+    h(
+      "div",
+      { class: "sheet-body" },
+      h("h4", { class: "set-label" }, "Theme"),
+      THEMES.map(([k, name, note]) =>
+        h(
+          "button",
+          { class: `set-row${state.theme === k ? " on" : ""}`, onclick: () => update({ theme: k }) },
+          h("span", { class: "swatch", "data-theme": k }, h("i")),
+          h("span", { class: "set-txt" }, h("span", null, name), h("span", { class: "muted" }, note)),
+          state.theme === k ? icon("check") : null,
+        ),
+      ),
+    ),
+  );
+}
+
 export function sizeClass(width) {
   if (width < 600) return "phone";
   if (width < 1100) return "tablet";
@@ -80,6 +110,7 @@ export function renderShell(model, width) {
   }
   const file = model.byPath.get(state.file);
   if (state.sheet === "contents" && file && state.view === "file") app.append(overlay(renderContents(file)));
+  if (state.sheet === "settings") app.append(overlay(settingsSheet()));
   if (state.sheet === "legend") {
     app.append(overlay(h("div", { class: "sheet legend-sheet" }, h("div", { class: "sheet-head" }, h("strong", null, "Marks"), h("span", { class: "muted" }), closeBtn()), h("div", { class: "sheet-body" }, legend()))));
   }

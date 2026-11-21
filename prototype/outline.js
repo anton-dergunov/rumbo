@@ -63,9 +63,11 @@ function headEl(hd, file, el) {
   const task = !!hd.state;
   const hasBody = hd.blocks.length > 0;
   const hasKids = hd.children.length > 0;
-  const tIcon = task ? model.taskIcon(hd) : null;
+  // Task icons are shown in the agenda only; in a file the right margin holds just the priority.
   const aside = task
-    ? h("span", { class: "aside" }, prioMark(hd.priority), h("span", { class: "ticon" }, tIcon ? icon(tIcon) : null))
+    ? hd.priority
+      ? h("span", { class: "aside" }, prioMark(hd.priority))
+      : null
     : hasKids
       ? h(
           "span",
@@ -127,40 +129,30 @@ function nodeEl(hd, file, ov, depth) {
   return el;
 }
 
-function fileTitle(file) {
-  return h("header", { class: "doc-head" }, h("h1", null, icon(file.icon, "doc-icon"), h("span", null, file.title)));
-}
-
-function focusTitle(file, hd) {
-  const trail = h("nav", { class: "focus-trail" });
-  trail.append(h("button", { class: "crumb-btn", onclick: () => update({ focus: null }) }, icon(file.icon), file.title));
-  for (const p of hd.path) {
-    trail.append(h("span", { class: "sep" }, "›"));
-    trail.append(h("button", { class: "crumb-btn", onclick: () => update({ focus: p.id }) }, inline(p.title)));
-  }
-  return h(
-    "header",
-    { class: "doc-head focus-head" },
-    trail,
-    h("h1", null, hd.state ? stateGlyph(hd.state) : null, h("span", null, inline(hd.title))),
-    hd.blocks.length ? h("div", { class: "focus-intro" }, blocks(hd.blocks)) : null,
-  );
-}
-
 export function focusedHeading(file) {
   const entry = state.focus && model.headingById.get(state.focus);
   return entry && entry.file === file ? entry.heading : null;
 }
 
+/**
+ * The file's sections. The file name lives in the header bar, not on the page. A focused section
+ * is drawn as an ordinary top-level section with its contents beneath it, so it looks exactly as it
+ * does in the whole file.
+ */
 export function renderOutline(file) {
   const ov = overridesFor(file.path);
   const focus = focusedHeading(file);
-  const root = h("article", { class: `doc fold-${state.fold}`, "data-path": file.path });
-  root.append(focus ? focusTitle(file, focus) : fileTitle(file));
+  const root = h("article", { class: `doc fold-${state.fold}${focus ? " focused" : ""}`, "data-path": file.path });
   const list = h("div", { class: "nodes" });
-  const top = focus ? focus.children : file.doc.children;
-  for (const hd of top) list.append(nodeEl(hd, file, ov, 1));
-  if (!top.length) list.append(h("p", { class: "empty" }, focus ? "Nothing under this heading." : "No headings in this file yet."));
+  if (focus) {
+    if (!ov.has(focus.id)) ov.set(focus.id, "open");
+    const el = nodeEl(focus, file, ov, 1);
+    el.classList.add("focus-root");
+    list.append(el);
+  } else {
+    for (const hd of file.doc.children) list.append(nodeEl(hd, file, ov, 1));
+    if (!file.doc.children.length) list.append(h("p", { class: "empty" }, "No headings in this file yet."));
+  }
   root.append(list);
   return root;
 }
@@ -168,7 +160,7 @@ export function renderOutline(file) {
 // ---------------------------------------------------------------- toolbar, breadcrumb, contents
 
 const FOLD_LABELS = { overview: "Sections", tasks: "Tasks", all: "All" };
-const FOLD_ICONS = { overview: "unfold_less", tasks: "format_list_bulleted", all: "unfold_more" };
+const FOLD_ICONS = { overview: "unfold_less_double", tasks: "unfold_less", all: "unfold_more" };
 
 function setFold(k) {
   state.overrides.delete(state.file);
@@ -186,15 +178,14 @@ export function foldControl() {
     ),
     h(
       "button",
-      { class: "btn fold-cycle", title: "Fold depth", onclick: () => setFold(order[(order.indexOf(state.fold) + 1) % order.length]) },
+      { class: "btn icon-btn fold-cycle", title: `Fold depth: ${FOLD_LABELS[state.fold]}`, "aria-label": `Fold depth: ${FOLD_LABELS[state.fold]}`, onclick: () => setFold(order[(order.indexOf(state.fold) + 1) % order.length]) },
       icon(FOLD_ICONS[state.fold]),
-      FOLD_LABELS[state.fold],
     ),
   ];
 }
 
 export function contentsButton() {
-  return h("button", { class: "btn icon-btn", title: "Contents", "aria-label": "Contents", onclick: () => update({ sheet: "contents" }) }, icon("toc"));
+  return h("button", { class: "btn icon-btn", title: "Contents", "aria-label": "Contents", onclick: () => update({ sheet: "contents" }) }, icon("list_alt"));
 }
 
 /** Go to a level of the file: null = the whole file, else focus on that section. */

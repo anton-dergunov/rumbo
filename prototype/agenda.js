@@ -82,8 +82,12 @@ export function agendaTools() {
   const long = today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const short = today.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
   return [
-    h("span", { class: "view-title" }, "Agenda"),
-    h("span", { class: "ag-date" }, h("span", { class: "long" }, long), h("span", { class: "short" }, short)),
+    h(
+      "div",
+      { class: "titlebar" },
+      h("span", { class: "view-title" }, icon("checklist"), h("span", { class: "t" }, "Agenda")),
+      h("span", { class: "ag-date" }, h("span", { class: "long" }, long), h("span", { class: "short" }, short)),
+    ),
     h("span", { class: "spacer" }),
     h(
       "div",

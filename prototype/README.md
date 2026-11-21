@@ -27,7 +27,7 @@ Every switch is mirrored in the URL, so any combination can be bookmarked.
 | Switch     | URL key | Options |
 |------------|---------|---------|
 | Frame      | `frame` | `none` (real window), `ipad11p` 834×1210, `ipad11l` 1210×834, `minip` 744×1133, `minil` 1133×744, `phone` 412×915 |
-| Theme      | `theme` | `paper` (warm, serif reading; the default), `slate` (cool, all sans), `dusk` (warm dark), `night` (cool dark) |
+| Theme      | `theme` | `paper` (warm, serif reading; the default), `slate` (cool, all sans), `dusk` (warm dark), `night` (cool dark). The app's Settings also has this. |
 | Tablet nav | `nav`   | `rail` · `drawer` (see the table above) |
 | Data       | `data`  | `real` vault · `sample` synthetic vault in `sample-vault/` |
 
@@ -50,8 +50,9 @@ Every switch is mirrored in the URL, so any combination can be bookmarked.
   | pause bars | waiting |
   | dashed ring | maybe |
 
-- **Right margin:** an outlined **A** for high priority, and the task's icon.
-- **Legend:** "What the marks mean" at the bottom of the navigation list.
+- **Header:** the file name sits in the header with the section breadcrumb; it is not repeated on the page.
+- **Right margin:** an outlined **A** for high priority. Task icons appear in the agenda only.
+- **Bottom of the navigation list:** "What the marks mean" and **Settings** (the theme, for now).
 
 **Agenda**
 - **Sections:** High priority, In progress and Next up.

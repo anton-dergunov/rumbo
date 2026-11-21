@@ -37,7 +37,12 @@ export function renderNav(model) {
         ),
       ),
     ),
-    h("button", { class: "legend-link", onclick: () => update({ sheet: "legend", drawer: false }) }, icon("info"), "What the marks mean"),
+    h(
+      "div",
+      { class: "nav-foot" },
+      h("button", { class: "foot-link", onclick: () => update({ sheet: "legend", drawer: false }) }, icon("info"), "What the marks mean"),
+      h("button", { class: "foot-link", onclick: () => update({ sheet: "settings", drawer: false }) }, icon("settings"), "Settings"),
+    ),
   );
 }
 

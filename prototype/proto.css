@@ -154,11 +154,29 @@ body.framed #viewport {
 .file-pane .pane-scroll {
   background: var(--surface);
 }
-.view-title {
-  font: 600 17px var(--font-read);
-  color: var(--ink);
+/* The header title ("Agenda", or the file name) and what follows it share one baseline. */
+.titlebar {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
   padding-left: 4px;
+}
+.view-title,
+.pane-crumb .cr-file {
+  display: inline-block;
+  font: 600 18px/1.2 var(--font-read);
+  color: var(--ink);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.view-title .ms,
+.pane-crumb .cr-file .ms {
+  font-size: 20px;
+  color: var(--accent);
+  vertical-align: -4px;
+  margin-right: 8px;
 }
 
 /* ------------------------------------------------------------ controls */
@@ -227,22 +245,18 @@ body.framed #viewport {
 }
 .size-phone .fold-cycle {
   display: inline-flex;
-  padding: 0 8px;
-}
-.fold-cycle .ms {
-  font-size: 19px;
 }
 
 .pane-crumb {
   min-width: 0;
   flex: 0 1 auto;
   overflow: hidden;
-  font: 500 13.5px var(--font-ui);
+  font: 500 14px var(--font-ui);
   color: var(--ink-3);
 }
 .crumbs {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 2px;
   min-width: 0;
   max-width: 100%;
@@ -254,44 +268,62 @@ body.framed #viewport {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.crumbs .cr {
-  flex: 0 1 auto;
-  min-width: 2.5em;
-}
 .crumbs .sep {
   color: var(--ink-4);
   flex: none;
-  padding: 0 2px;
+  padding: 0 3px;
 }
-button.cr,
-button.cr-file {
-  min-height: 36px;
-  padding: 0 5px;
+.pane-crumb .cr-file {
+  flex: 0 1 auto;
+  min-width: 3em;
+  padding: 6px 4px;
+  border-radius: 7px;
+}
+.pane-crumb .cr {
+  flex: 0 1 auto;
+  min-width: 2.5em;
+  padding: 6px 4px;
   border-radius: 7px;
   color: var(--ink-3);
 }
-button.cr:active,
-button.cr-file:active {
-  background: var(--sunk);
-}
-.crumbs > :last-child {
+.pane-crumb .cr:last-child {
   color: var(--ink-2);
 }
-.cr-file {
+/* crumbs under an agenda row: small, the file in front */
+.ag-meta .crumbs {
+  align-items: center;
+}
+.ag-meta .cr-file {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   color: var(--ink-2);
   flex: none;
 }
-.cr-file .ms {
-  font-size: 17px;
+.ag-meta .cr-file .ms {
+  font-size: 15px;
   color: var(--accent);
 }
-/* On a phone: the file icon and only the innermost section. */
-.size-phone .cr-file .t,
-.size-phone .crumbs > .cr:not(:last-child),
-.size-phone .crumbs > .sep:not(:nth-last-child(2)) {
+.ag-meta .cr {
+  min-width: 2.5em;
+}
+button.cr:active,
+button.cr-file:active {
+  background: var(--sunk);
+}
+/* On a phone: the file name and only the innermost section. */
+.size-phone .pane-crumb .crumbs > .cr:not(:last-child),
+.size-phone .pane-crumb .crumbs > .sep:not(:nth-last-child(2)) {
+  display: none;
+}
+.size-phone .pane-crumb .cr-file {
+  font-size: 17px;
+}
+.size-phone .pane-crumb .cr-file:not(:last-child) {
+  min-width: 0;
+  flex: none;
+}
+.size-phone .pane-crumb .cr-file:not(:last-child) .t {
   display: none;
 }
 .vault-chip {
@@ -601,11 +633,9 @@ button.cr-file:active {
   color: var(--ink);
 }
 code.verb {
-  font: 0.84em var(--font-mono);
-  background: var(--sunk);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
   color: var(--ink-2);
-  padding: 1px 5px;
-  border-radius: 4px;
   overflow-wrap: anywhere;
 }
 a.lnk {
@@ -633,12 +663,9 @@ a.lnk.bare .rest {
 }
 a.fileref {
   color: var(--accent);
-  text-decoration: none;
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  border-radius: 5px;
-  padding: 0 5px 1px 3px;
-  white-space: nowrap;
-  font: 500 0.9em var(--font-ui);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 2px;
 }
 ul.links {
   list-style: none;
@@ -648,14 +675,13 @@ ul.links {
 ul.links li a {
   display: flex;
   align-items: baseline;
-  gap: 7px;
-  padding: 4px 0;
+  gap: 6px;
+  padding: 1px 0;
   text-decoration: none;
-  font: 14px/1.35 var(--font-ui);
   min-width: 0;
 }
 ul.links li a .ms {
-  font-size: 15px;
+  font-size: 0.9em;
   color: var(--ink-4);
   align-self: center;
 }
@@ -665,7 +691,6 @@ ul.links .desc {
 }
 ul.links .host {
   color: var(--link);
-  font-weight: 500;
   flex: none;
 }
 ul.links .rest {
@@ -739,18 +764,75 @@ hr {
 .tfolder:first-child {
   margin-top: 4px;
 }
-.legend-link {
+.nav-foot {
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule-soft);
+}
+.foot-link {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  width: 100%;
   min-height: 40px;
-  margin-top: 18px;
   padding: 0 12px;
-  font: 13px var(--font-ui);
+  border-radius: 10px;
+  font: 14px var(--font-ui);
   color: var(--ink-3);
 }
-.legend-link .ms {
-  font-size: 17px;
+.foot-link:active {
+  background: var(--sunk);
+}
+.foot-link .ms {
+  font-size: 19px;
+}
+.set-label {
+  margin: 10px 10px 4px;
+  font: 600 11.5px var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+.set-row:active,
+.set-row.on {
+  background: var(--select);
+}
+.set-row > .ms {
+  color: var(--accent);
+}
+.set-txt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 15px;
+}
+.set-txt .muted {
+  font-size: 12.5px;
+}
+.swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  display: grid;
+  place-items: center;
+}
+.swatch i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 .tfolder.loose {
   margin-top: 18px;
@@ -865,64 +947,6 @@ hr {
 .size-phone .doc {
   padding: 18px 16px 120px;
 }
-.doc-head {
-  margin-bottom: 10px;
-}
-.doc-head h1 {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font: 600 28px/1.2 var(--font-read);
-  letter-spacing: -0.012em;
-  color: var(--ink);
-  margin: 4px 0 0;
-}
-.doc-icon {
-  font-size: 28px;
-  color: var(--accent);
-  font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 40;
-}
-.focus-trail {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2px;
-  margin: -4px 0 4px -6px;
-  font: 13.5px var(--font-ui);
-  color: var(--ink-4);
-}
-.crumb-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 34px;
-  padding: 0 6px;
-  border-radius: 7px;
-  color: var(--accent);
-  max-width: 22em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.crumb-btn .ms {
-  font-size: 17px;
-}
-.focus-head h1 {
-  font-size: 25px;
-}
-.focus-head h1 .glyph {
-  width: 12px;
-  height: 12px;
-}
-.focus-intro {
-  margin-top: 10px;
-  color: var(--ink-3);
-  font-size: 0.95em;
-}
-.focus-intro p {
-  margin: 0 0 0.5em;
-}
-
 /* ------------------------------------------------------------ outline nodes */
 
 .node {
@@ -957,15 +981,6 @@ hr {
   height: 1.42em;
   margin-left: 8px;
   flex: none;
-}
-.ticon {
-  width: 22px;
-  display: flex;
-  justify-content: center;
-  color: var(--ink-3);
-}
-.ticon .ms {
-  font-size: 19px;
 }
 .more {
   font-size: 0.85em;
@@ -1047,7 +1062,10 @@ hr {
   height: 1.3em;
 }
 .nodes > .sect.d-1:first-child > .head {
-  margin-top: 0.8em;
+  margin-top: 0.2em;
+}
+.focus-root > .head .focus-btn {
+  display: none;
 }
 .sect.d-2 > .head {
   font-size: 1.07em;
@@ -1099,7 +1117,6 @@ hr {
   font: 14px var(--font-ui);
   color: var(--ink-3);
   white-space: nowrap;
-  padding-left: 6px;
 }
 .ag-date .short,
 .size-phone .ag-date .long {
