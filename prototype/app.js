@@ -29,7 +29,7 @@ function applyFrame() {
   document.documentElement.dataset.theme = state.theme;
   const dark = state.theme === "dusk" || state.theme === "night";
   document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || (dark ? "#000" : "#fff");
-  viewport.className = `marks-${state.marks}`;
+  viewport.className = `marks-${state.marks} outline-${state.outline} icons-${state.icons}`;
 }
 
 function pickDefaultFile() {
@@ -83,7 +83,7 @@ function render() {
 
 actions.openFile = (path) => {
   const narrow = ["phone", "portrait"].includes(sizeClass(viewportWidth()));
-  const patch = { file: path, nav: null, task: null, drawer: false, sheet: null };
+  const patch = { file: path, focus: null, drawer: false, sheet: null };
   if (state.shell === "home" || state.shell === "tabs" || narrow) patch.view = "file";
   update(patch);
 };
@@ -100,7 +100,7 @@ let resizeRaf = 0;
 window.addEventListener("resize", () => (resizeRaf ||= requestAnimationFrame(() => ((resizeRaf = 0), render()))));
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && (state.sheet || state.drawer)) update({ sheet: null, drawer: false });
-  if (e.key === "Tab" && e.shiftKey && state.outline !== "navigator") {
+  if (e.key === "Tab" && e.shiftKey) {
     e.preventDefault();
     const order = ["overview", "tasks", "all"];
     state.overrides.delete(state.file);

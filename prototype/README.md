@@ -9,27 +9,46 @@ toolbar in the bottom-right corner switches between them; it is part of the prot
 Tap a toolbar button to move to the next option. Right-click or long-press it to move back.
 Every switch is mirrored in the URL, so any combination can be bookmarked.
 
-| Switch  | URL key   | Options |
-|---------|-----------|---------|
-| Frame   | `frame`   | `none` (real window), `ipad11p` 834×1210, `ipad11l` 1210×834, `minip` 744×1133, `minil` 1133×744, `phone` 412×915 |
-| Theme   | `theme`   | `paper` (warm, serif reading), `slate` (cool, all sans), `dusk` (warm dark), `night` (cool dark) |
-| Shell   | `shell`   | `panes` tree, file and agenda side by side (narrower screens fold the tree to an icon rail, then put File and Agenda behind a switch) · `tabs` Agenda and Files tabs · `home` agenda as home, files from a drawer |
-| Tree    | `tree`    | `list` compact rows · `index` rows with each file's subtitle · `grid` tiles (the full Files page in the tabs shell) |
-| Outline | `outline` | `document` reading page · `outliner` rows with chevrons, guides and a one-line preview · `cards` one card per top section · `navigator` drill down one level at a time (master-detail on wide screens) |
-| Agenda  | `agenda`  | `columns` aligned slots like the Emacs agenda · `rows` two-line rows showing where each task lives · `grouped` grouped by file |
-| Marks   | `marks`   | `quiet`: TODO is an empty ring, and only NEXT/INPR/WAIT carry a word · `dots`: a coloured dot and the word · `pills`: tinted pills like org-modern |
-| Data    | `data`    | `real` vault · `sample` synthetic vault in `sample-vault/` |
+| Switch     | URL key   | Options |
+|------------|-----------|---------|
+| Frame      | `frame`   | `none` (real window), `ipad11p` 834×1210, `ipad11l` 1210×834, `minip` 744×1133, `minil` 1133×744, `phone` 412×915 |
+| Theme      | `theme`   | `paper` (warm, serif reading; the default), `slate` (cool, all sans), `dusk` (warm dark), `night` (cool dark) |
+| Shell      | `shell`   | `panes`: file list, file and agenda side by side. Narrower screens fold the list to an icon rail, then put File and Agenda behind a switch. `tabs`: Agenda and Files tabs. `home`: the agenda is home and files open from a drawer. |
+| Sections   | `outline` | `indent`: nested sections step in a little. `guides`: the same, with a faint line down each level. |
+| States     | `marks`   | `shapes`: a shape in a fixed slot, so titles always line up. `labels`: the same shapes, plus the state as a word in the right margin. |
+| Task icons | `icons`   | `right`: task icons in the right margin of the outline and in the agenda's icon square · `off` |
+| Data       | `data`    | `real` vault · `sample` synthetic vault in `sample-vault/` |
 
-Other URL keys:
+**State shapes:**
+
+| Shape | State |
+|---|---|
+| empty ring | to do |
+| filled dot | next |
+| half-filled dot | in progress |
+| pause bars | waiting |
+| dashed ring | maybe |
+
+The ⓘ button in the agenda header shows this legend in the app. High priority is an outlined **A** in the right margin.
+
+### In the app (not prototype switches)
+
+**File view**
+- **Fold depth:** Sections, Tasks and All work like Org's Shift-Tab; Shift-Tab on a keyboard cycles them.
+- **One heading:** tapping a heading opens or closes just that heading.
+- **Focus:** the › button on a section narrows the page to that section, with a breadcrumb back (URL key `focus`).
+- **Contents:** the contents button lists the top sections, for jumping around a long file.
+
+**Agenda**
+- The pane header shows today's date.
+- **List / By file:** groups the same rows under their files (URL key `group`).
+- **Rows:** tapping a row shows its notes, and "Open in …" jumps to the task in its file.
+
+**Other URL keys**
 - `file`: vault-relative path of the open file.
 - `fold`: `overview` / `tasks` / `all`.
 - `view`: `agenda` / `files` / `file`, for single-pane layouts.
-- `nav` and `task`: the navigator's position.
 - `harness=0`: hides the toolbar. On a phone-sized window it starts hidden behind a ⚙ button.
-
-Folding mirrors Org's Shift-Tab. **Sections**, **Tasks** and **All** set the depth for the whole
-file, and Shift-Tab on a keyboard cycles through them. Tapping a heading opens or closes just
-that heading. The contents button lists the top sections for jumping around a long file.
 
 ## Data rules
 

@@ -4,14 +4,12 @@
 import { h } from "./ui.js";
 import { state, update, VARIANTS, LABELS } from "./state.js";
 
-const NAMES = { frame: "Frame", theme: "Theme", shell: "Shell", tree: "Tree", outline: "Outline", agenda: "Agenda", marks: "Marks", data: "Data" };
+const NAMES = { frame: "Frame", theme: "Theme", shell: "Shell", outline: "Sections", marks: "States", icons: "Task icons", data: "Data" };
 
 function cycle(key, dir) {
   const list = VARIANTS[key];
   const next = list[(list.indexOf(state[key]) + dir + list.length) % list.length];
-  const patch = { [key]: next };
-  if (key === "outline") Object.assign(patch, { nav: null, task: null });
-  update(patch);
+  update({ [key]: next });
 }
 
 export function renderHarness() {

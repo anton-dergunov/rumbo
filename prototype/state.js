@@ -5,10 +5,9 @@ export const VARIANTS = {
   frame: ["none", "ipad11p", "ipad11l", "minip", "minil", "phone"],
   theme: ["paper", "slate", "dusk", "night"],
   shell: ["panes", "tabs", "home"],
-  tree: ["list", "index", "grid"],
-  outline: ["document", "outliner", "cards", "navigator"],
-  agenda: ["columns", "rows", "grouped"],
-  marks: ["quiet", "dots", "pills"],
+  outline: ["indent", "guides"],
+  marks: ["shapes", "labels"],
+  icons: ["right", "off"],
   data: ["real", "sample"],
 };
 
@@ -30,18 +29,17 @@ export const state = {
   frame: "none",
   theme: "paper",
   shell: "panes",
-  tree: "list",
-  outline: "document",
-  agenda: "columns",
-  marks: "quiet",
+  outline: "indent",
+  marks: "shapes",
+  icons: "right",
   data: "real",
   fold: "tasks",
   file: null, // vault-relative path of the open file
   view: "agenda", // single-pane contexts: "agenda" | "files" | "file"
-  nav: null, // navigator: id of the heading whose children are listed (null = file root)
-  task: null, // navigator: id of the task shown in detail
+  focus: null, // id of the section the file view is narrowed to (null = whole file)
+  group: "list", // agenda: "list" | "file"
   drawer: false,
-  sheet: null, // "contents" | null
+  sheet: null, // "contents" | "legend" | null
   harness: true,
   // in-memory only
   overrides: new Map(), // path -> Map(id -> "open" | "shut" | "kids")
@@ -49,7 +47,7 @@ export const state = {
   agendaShut: new Set(), // collapsed agenda sections
 };
 
-const URL_KEYS = [...Object.keys(VARIANTS), "fold", "file", "view", "nav", "task"];
+const URL_KEYS = [...Object.keys(VARIANTS), "fold", "file", "view", "focus", "group"];
 
 export function readUrl() {
   const p = new URLSearchParams(location.search);

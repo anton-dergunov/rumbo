@@ -175,9 +175,30 @@ function block(b) {
 
 // ---------------------------------------------------------------- marks
 
-export function stateMark(s) {
+export const STATE_NAMES = { TODO: "To do", NEXT: "Next", INPR: "In progress", WAIT: "Waiting", MAYB: "Maybe", DONE: "Done" };
+
+/** The state as a shape in a fixed-width slot, so titles line up whatever the state. */
+export function stateGlyph(s) {
   if (!s) return null;
-  return h("span", { class: "mark", "data-s": s, title: s }, h("i", { class: "dot" }), h("b", null, s));
+  return h("i", { class: "glyph", "data-s": s, title: STATE_NAMES[s] || s });
+}
+
+/** The state as a word for the right margin ("labels" marks only). TODO gets no word. */
+export function stateLabel(s) {
+  if (!s || s === "TODO") return null;
+  return h("span", { class: "slabel", "data-s": s }, (STATE_NAMES[s] || s).toLowerCase());
+}
+
+export function legend() {
+  const row = (mark, text) => h("div", { class: "legend-row" }, h("span", { class: "legend-mark" }, mark), h("span", null, text));
+  return h(
+    "div",
+    { class: "legend" },
+    ["TODO", "NEXT", "INPR", "WAIT", "MAYB"].map((s) => row(stateGlyph(s), STATE_NAMES[s])),
+    row(prioMark("A"), "High priority"),
+    row(icon("notes", "more"), "Has notes — tap the task to read them"),
+    row(h("span", { class: "signal" }, h("span", { class: "sg", "data-s": "NEXT" }, h("i"), "2")), "Counts in the file list: in progress, high priority, next"),
+  );
 }
 
 export function prioMark(p) {
@@ -238,6 +259,7 @@ export function signal(c, { total = false } = {}) {
 
 export function crumbs(heading, { file, sep = "›" } = {}) {
   const parts = [];
+  if (!file && !heading.path.length) return null;
   if (file) parts.push(h("span", { class: "cr-file" }, icon(file.icon), file.name));
   for (const p of heading.path) parts.push(h("span", { class: "cr" }, inline(p.title)));
   const out = h("span", { class: "crumbs" });
