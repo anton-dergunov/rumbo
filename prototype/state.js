@@ -5,6 +5,7 @@ export const VARIANTS = {
   frame: ["none", "ipad11p", "ipad11l", "minip", "minil", "phone"],
   theme: ["paper", "slate", "dusk", "night"],
   nav: ["rail", "drawer"], // tablet portrait: icon rail beside the page, or the page alone with a drawer
+  folded: ["chip", "stack"], // how a collapsed section shows that it holds more
   data: ["real", "sample"],
 };
 
@@ -26,6 +27,7 @@ export const state = {
   frame: "none",
   theme: "paper",
   nav: "rail",
+  folded: "chip",
   data: "real",
   fold: "tasks",
   file: null, // vault-relative path of the open file

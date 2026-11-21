@@ -104,7 +104,8 @@ function headEl(hd, file, el) {
       planningChips(hd.planning),
       tagList(hd.tags),
       hasBody ? icon("notes", "more") : null,
-      !task && hasKids ? h("span", { class: "count" }, signal(countsOf(hd), { total: true })) : null,
+      // Shown only while the section is collapsed: tells the reader there is more inside.
+      !task && hasKids ? h("span", { class: "folded", title: "Collapsed — tap to open" }, icon("expand_more", "fold-ic"), signal(countsOf(hd), { total: true }) || h("span", { class: "sg total" }, "more")) : null,
     ),
     aside,
   );

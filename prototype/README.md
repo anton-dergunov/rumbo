@@ -30,6 +30,7 @@ Every switch is mirrored in the URL, so any combination can be bookmarked.
 | Frame      | `frame` | `none` (real window), `ipad11p` 834×1210, `ipad11l` 1210×834, `minip` 744×1133, `minil` 1133×744, `phone` 412×915 |
 | Theme      | `theme` | `paper` (warm, serif reading; the default), `slate` (cool, all sans), `dusk` (warm dark), `night` (cool dark). The app's Settings also has this. |
 | Tablet nav | `nav`   | `rail` · `drawer` (see the table above) |
+| Folded     | `folded` | how a collapsed section shows there is more inside: `chip` (an expand chevron and the counts in a small chip under the title) · `stack` (faint page edges under the heading, counts beside the title) |
 | Data       | `data`  | `real` vault · `sample` synthetic vault in `sample-vault/` |
 
 ## In the app

@@ -1038,13 +1038,71 @@ hr {
 .node.body-hidden > .head .more {
   display: inline;
 }
-.head .count {
+/* A collapsed section says so. Two styles to compare:
+   chip   a small rounded chip under the title: an expand chevron and the counts
+   stack  faint edges under the heading, like folded pages, with the counts beside the title */
+.head .folded {
   display: none;
-  margin-left: 10px;
-  vertical-align: 1px;
 }
-.node.kids-hidden > .head .count {
+.sect.kids-hidden > .head .more {
+  display: none;
+}
+.folded .fold-ic {
+  font-size: 18px;
+  color: var(--ink-3);
+}
+.folded-chip .sect.kids-hidden > .head .folded {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-top: 8px;
+  padding: 3px 11px 3px 5px;
+  border-radius: 999px;
+  background: var(--sunk);
+  font: 500 12.5px/1.2 var(--font-ui);
+}
+.folded-chip .sect.kids-hidden > .head:active .folded {
+  background: var(--select);
+}
+.folded-stack .sect.kids-hidden > .head .folded {
   display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  vertical-align: 2px;
+  font: 500 12.5px/1 var(--font-ui);
+}
+.folded-stack .sect.kids-hidden > .head .fold-ic {
+  display: none;
+}
+.folded-stack .sect.kids-hidden > .head {
+  position: relative;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  margin-bottom: 14px;
+}
+/* two page edges peeking out under the heading line, each a little narrower */
+.folded-stack .sect.kids-hidden > .head::before,
+.folded-stack .sect.kids-hidden > .head::after {
+  content: "";
+  position: absolute;
+  height: 4px;
+  border: 1px solid var(--rule);
+  border-top: 0;
+  border-radius: 0 0 4px 4px;
+}
+.folded-stack .sect.kids-hidden > .head::before {
+  left: 5px;
+  right: 5px;
+  bottom: -5px;
+}
+.folded-stack .sect.kids-hidden > .head::after {
+  left: 11px;
+  right: 11px;
+  bottom: -9px;
+  border-color: var(--rule-soft);
 }
 .focus-btn {
   width: 36px;
