@@ -200,6 +200,18 @@ body.framed #viewport {
 .btn.icon-btn {
   padding: 0;
 }
+.btn:disabled {
+  color: var(--ink-4);
+  opacity: 0.45;
+  cursor: default;
+}
+.btn:disabled:active {
+  background: none;
+}
+.hist {
+  display: inline-flex;
+  flex: none;
+}
 .btn.back {
   color: var(--accent);
 }
@@ -675,13 +687,14 @@ ul.links {
 ul.links li a {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  padding: 1px 0;
+  gap: 7px;
+  padding: 4px 0;
   text-decoration: none;
+  font: 14px/1.35 var(--font-ui);
   min-width: 0;
 }
 ul.links li a .ms {
-  font-size: 0.9em;
+  font-size: 15px;
   color: var(--ink-4);
   align-self: center;
 }
@@ -691,6 +704,7 @@ ul.links .desc {
 }
 ul.links .host {
   color: var(--link);
+  font-weight: 500;
   flex: none;
 }
 ul.links .rest {

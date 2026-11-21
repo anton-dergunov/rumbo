@@ -55,6 +55,12 @@ export function readUrl() {
   if (p.get("harness") === "0") state.harness = false;
 }
 
+// Our place in the browser history, so the header's back and forward buttons know what they can do.
+let navIdx = history.state?.idx ?? 0;
+let navMax = navIdx;
+export const canGoBack = () => navIdx > 0;
+export const canGoForward = () => navIdx < navMax;
+
 export function writeUrl(push = false) {
   const p = new URLSearchParams();
   for (const k of URL_KEYS) {
@@ -64,8 +70,11 @@ export function writeUrl(push = false) {
   }
   if (!state.harness) p.set("harness", "0");
   const url = `${location.pathname}?${p.toString().replace(/%2F/g, "/")}`;
-  if (push) history.pushState(null, "", url);
-  else history.replaceState(null, "", url);
+  if (push) {
+    navIdx += 1;
+    navMax = navIdx;
+    history.pushState({ idx: navIdx }, "", url);
+  } else history.replaceState({ idx: navIdx }, "", url);
 }
 
 let renderer = () => {};
@@ -82,7 +91,8 @@ export function update(patch = {}) {
   renderer();
 }
 
-export function restoreFromUrl() {
+export function restoreFromUrl(event) {
+  navIdx = event?.state?.idx ?? 0;
   Object.assign(state, { view: "agenda", focus: null, sheet: null, drawer: false });
   readUrl();
   renderer();

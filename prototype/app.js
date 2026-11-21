@@ -9,6 +9,7 @@ import { renderHarness } from "./harness.js";
 
 const viewport = document.getElementById("viewport");
 const models = new Map();
+const scrolls = new Map();
 let model = null;
 let loading = null;
 
@@ -70,8 +71,8 @@ function render() {
   setOutlineModel(model);
   pickDefaultFile();
 
-  // Keep scroll positions across redraws (each scroller names itself with data-scroll).
-  const scrolls = new Map();
+  // Remember every scroller's position by name (data-scroll), so redraws and Back/Forward return
+  // to where the reader was.
   for (const el of viewport.querySelectorAll("[data-scroll]")) scrolls.set(el.dataset.scroll, el.scrollTop);
   const width = viewportWidth();
   viewport.dataset.size = sizeClass(width);

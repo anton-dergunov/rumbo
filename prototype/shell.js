@@ -6,9 +6,9 @@
 //   landscape/desk the list as a sidebar
 
 import { h, icon, legend } from "./ui.js";
-import { state, update } from "./state.js";
+import { state, update, canGoBack, canGoForward } from "./state.js";
 import { renderNav, renderRail } from "./tree.js";
-import { renderOutline, foldControl, contentsButton, crumbTrail, focusedHeading, renderContents, closeBtn, goUp } from "./outline.js";
+import { renderOutline, foldControl, contentsButton, crumbTrail, focusedHeading, renderContents, closeBtn } from "./outline.js";
 import { renderAgenda, agendaTools } from "./agenda.js";
 
 const THEMES = [
@@ -51,15 +51,28 @@ function pane(cls, head, body, scrollKey) {
   return h("section", { class: `pane ${cls}` }, h("header", { class: "pane-head" }, head), h("div", { class: "pane-scroll", "data-scroll": scrollKey }, body));
 }
 
+/** Back and forward through the places visited (files, sections, views). Hidden until there is history. */
+function historyBtns() {
+  const back = canGoBack();
+  const fwd = canGoForward();
+  if (!back && !fwd) return null;
+  return h(
+    "span",
+    { class: "hist" },
+    h("button", { class: "btn icon-btn", title: "Back", "aria-label": "Back", disabled: !back, onclick: () => history.back() }, icon("arrow_back")),
+    h("button", { class: "btn icon-btn", title: "Forward", "aria-label": "Forward", disabled: !fwd, onclick: () => history.forward() }, icon("arrow_forward")),
+  );
+}
+
 const menuBtn = () => h("button", { class: "btn icon-btn", "aria-label": "Views and files", onclick: () => update({ drawer: true }) }, icon("menu"));
 
 function filePane(model, menu) {
   const file = model.byPath.get(state.file);
-  if (!file) return pane("file-pane", [menu], h("p", { class: "empty pad" }, "Choose a file from the list."), "nofile");
+  if (!file) return pane("file-pane", [menu, historyBtns()], h("p", { class: "empty pad" }, "Choose a file from the list."), "nofile");
   const crumb = h("div", { class: "pane-crumb" }, crumbTrail(file, focusedHeading(file)));
   const head = [
     menu,
-    state.focus ? h("button", { class: "btn icon-btn back", title: "Up one level", "aria-label": "Back", onclick: goUp }, icon("arrow_back")) : null,
+    historyBtns(),
     crumb,
     h("span", { class: "spacer" }),
     foldControl(),
@@ -68,7 +81,7 @@ function filePane(model, menu) {
   return pane("file-pane", head, renderOutline(file), `file:${file.path}:${state.focus || ""}`);
 }
 
-const agendaPane = (model, menu) => pane("agenda-pane", [menu, agendaTools()], renderAgenda(model), "agenda");
+const agendaPane = (model, menu) => pane("agenda-pane", [menu, historyBtns(), agendaTools()], renderAgenda(model), "agenda");
 
 function overlay(content) {
   return h("div", { class: "overlay", onclick: (e) => e.target === e.currentTarget && update({ sheet: null, drawer: false }) }, content);

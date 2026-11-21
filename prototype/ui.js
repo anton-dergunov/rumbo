@@ -191,7 +191,7 @@ export function legend() {
     ["TODO", "NEXT", "INPR", "WAIT", "MAYB"].map((s) => row(stateGlyph(s), STATE_NAMES[s])),
     row(prioMark("A"), "High priority"),
     row(icon("notes", "more"), "Has notes: tap the task to read them"),
-    row(icon("chevron_right", "legend-focus"), "Focus on one section; the back arrow or the breadcrumb returns"),
+    row(icon("chevron_right", "legend-focus"), "Focus on one section; tap the file name in the header to return"),
     row(h("span", { class: "signal" }, h("span", { class: "sg", "data-s": "NEXT" }, h("i"), "2")), "Counts beside a file: in progress, high priority, next"),
   );
 }

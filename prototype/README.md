@@ -16,8 +16,9 @@ at a time, either a view or a file. How the list appears depends on the width:
 | tablet (600–1100 px) | an icon rail beside the page, with ☰ on the rail opening the list with names (`nav=rail`); or the page alone with the drawer, as on a phone (`nav=drawer`) |
 | landscape and desktop | the list as a sidebar |
 
-Opening a file, a view or a focused section is a history entry, so the browser's Back and Forward
-work.
+Opening a file, a view or a focused section is a history entry. The ← and → buttons in the
+header, and the browser's own Back and Forward, move through them, and each place keeps its
+scroll position.
 
 ## Switches
 
@@ -37,7 +38,6 @@ Every switch is mirrored in the URL, so any combination can be bookmarked.
 - **Fold depth:** Sections, Tasks and All work like Org's Shift-Tab; Shift-Tab on a keyboard cycles them. On a phone it is one button that cycles.
 - **One heading:** tapping a heading opens or closes just that heading.
 - **Focus:** the › button on a section narrows the page to that section.
-  - The ← button goes up one level.
   - The header shows the file, then the focused section's path. It does not change while scrolling. Every part of it can be tapped: the file returns to the whole file, and a section focuses on that section.
 - **Contents:** the contents button lists the top sections, for jumping around a long file.
 - **State shapes:**

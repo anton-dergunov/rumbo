@@ -197,14 +197,6 @@ export function goTo(id) {
   update({ focus: id });
 }
 
-/** One level up from the focused section (to the whole file at the top). */
-export function goUp() {
-  const entry = state.focus && model.headingById.get(state.focus);
-  if (!entry) return;
-  const parent = entry.heading.path[entry.heading.path.length - 1];
-  update({ focus: parent ? parent.id : null });
-}
-
 /** The header breadcrumb: the file, then the focused section's path. It does not follow scrolling. */
 export function crumbTrail(file, hd) {
   const out = h("div", { class: "crumbs" });
