@@ -30,7 +30,7 @@ function applyFrame() {
   document.documentElement.dataset.theme = state.theme;
   const dark = state.theme === "dusk" || state.theme === "night";
   document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || (dark ? "#000" : "#fff");
-  viewport.className = `folded-${state.folded}`;
+  viewport.className = "";
 }
 
 function pickDefaultFile() {

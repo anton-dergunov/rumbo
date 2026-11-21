@@ -30,14 +30,13 @@ Every switch is mirrored in the URL, so any combination can be bookmarked.
 | Frame      | `frame` | `none` (real window), `ipad11p` 834×1210, `ipad11l` 1210×834, `minip` 744×1133, `minil` 1133×744, `phone` 412×915 |
 | Theme      | `theme` | `paper` (warm, serif reading; the default), `slate` (cool, all sans), `dusk` (warm dark), `night` (cool dark). The app's Settings also has this. |
 | Tablet nav | `nav`   | `rail` · `drawer` (see the table above) |
-| Folded     | `folded` | how a collapsed section shows there is more inside: `chip` (an expand chevron and the counts in a small chip under the title) · `stack` (faint page edges under the heading, counts beside the title) |
 | Data       | `data`  | `real` vault · `sample` synthetic vault in `sample-vault/` |
 
 ## In the app
 
 **File view**
 - **Fold depth:** Sections, Tasks and All work like Org's Shift-Tab; Shift-Tab on a keyboard cycles them. On a phone it is one button that cycles.
-- **One heading:** tapping a heading opens or closes just that heading.
+- **One heading:** tapping a heading opens or closes just that heading. A collapsed section shows a small chip under its title with an expand chevron and its counts.
 - **Focus:** the › button on a section narrows the page to that section.
   - The header shows the file, then the focused section's path. It does not change while scrolling. Every part of it can be tapped: the file returns to the whole file, and a section focuses on that section.
 - **Contents:** the contents button lists the top sections, for jumping around a long file.
