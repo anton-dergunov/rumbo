@@ -205,38 +205,14 @@ export function goUp() {
   update({ focus: parent ? parent.id : null });
 }
 
-function crumbTrail(file, hd) {
+/** The header breadcrumb: the file, then the focused section's path. It does not follow scrolling. */
+export function crumbTrail(file, hd) {
   const out = h("div", { class: "crumbs" });
   out.append(h("button", { class: "cr-file", onclick: () => goTo(null) }, icon(file.icon), h("span", { class: "t" }, file.title)));
   for (const p of hd ? [...hd.path, hd] : []) {
     out.append(h("span", { class: "sep" }, "›"), h("button", { class: "cr", onclick: () => goTo(p.id) }, inline(p.title)));
   }
   return out;
-}
-
-/** Keep `crumbEl` showing where the reader is: the file, the focused section, then the section in view. */
-export function trackSection(scrollEl, crumbEl, file) {
-  let raf = 0;
-  let last = "";
-  const run = () => {
-    raf = 0;
-    const top = scrollEl.getBoundingClientRect().top + 8;
-    const heads = scrollEl.querySelectorAll(".node.sect.d-1 > .head, .node.sect.d-2 > .head, .node.sect.d-3 > .head");
-    let current = null;
-    for (const hEl of heads) {
-      const r = hEl.getBoundingClientRect();
-      if (!r.height) continue;
-      if (r.top <= top) current = hEl.parentElement;
-      else break;
-    }
-    const hd = current ? model.headingById.get(current.dataset.id).heading : focusedHeading(file);
-    const key = hd ? hd.id : "";
-    if (key === last && crumbEl.firstChild) return;
-    last = key;
-    crumbEl.replaceChildren(crumbTrail(file, hd));
-  };
-  scrollEl.addEventListener("scroll", () => (raf ||= requestAnimationFrame(run)), { passive: true });
-  run();
 }
 
 export function renderContents(file) {

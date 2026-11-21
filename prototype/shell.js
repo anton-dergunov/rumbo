@@ -8,7 +8,7 @@
 import { h, icon, legend } from "./ui.js";
 import { state, update } from "./state.js";
 import { renderNav, renderRail } from "./tree.js";
-import { renderOutline, foldControl, contentsButton, trackSection, renderContents, closeBtn, goUp } from "./outline.js";
+import { renderOutline, foldControl, contentsButton, crumbTrail, focusedHeading, renderContents, closeBtn, goUp } from "./outline.js";
 import { renderAgenda, agendaTools } from "./agenda.js";
 
 const THEMES = [
@@ -56,7 +56,7 @@ const menuBtn = () => h("button", { class: "btn icon-btn", "aria-label": "Views 
 function filePane(model, menu) {
   const file = model.byPath.get(state.file);
   if (!file) return pane("file-pane", [menu], h("p", { class: "empty pad" }, "Choose a file from the list."), "nofile");
-  const crumb = h("div", { class: "pane-crumb" });
+  const crumb = h("div", { class: "pane-crumb" }, crumbTrail(file, focusedHeading(file)));
   const head = [
     menu,
     state.focus ? h("button", { class: "btn icon-btn back", title: "Up one level", "aria-label": "Back", onclick: goUp }, icon("arrow_back")) : null,
@@ -65,9 +65,7 @@ function filePane(model, menu) {
     foldControl(),
     contentsButton(),
   ];
-  const p = pane("file-pane", head, renderOutline(file), `file:${file.path}:${state.focus || ""}`);
-  queueMicrotask(() => trackSection(p.querySelector(".pane-scroll"), crumb, file));
-  return p;
+  return pane("file-pane", head, renderOutline(file), `file:${file.path}:${state.focus || ""}`);
 }
 
 const agendaPane = (model, menu) => pane("agenda-pane", [menu, agendaTools()], renderAgenda(model), "agenda");
