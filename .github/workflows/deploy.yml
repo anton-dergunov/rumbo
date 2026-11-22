@@ -30,7 +30,7 @@ jobs:
           python-version: "3.13"
       - name: Check the syntax of every app module
         run: git ls-files 'app/*.js' | xargs -n1 node --check
-      - run: node --test tests/
+      - run: node --test "tests/*.test.mjs"
       - run: python -m unittest discover tests
       - run: node tools/build.mjs
       - run: git diff --check

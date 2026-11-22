@@ -5,7 +5,7 @@
   "description": "A calm planner for an Org-mode vault, for tablets and phones.",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/",
+    "test": "node --test \"tests/*.test.mjs\"",
     "build": "node tools/build.mjs"
   }
 }

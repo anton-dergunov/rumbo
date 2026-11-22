@@ -132,7 +132,13 @@ test("a network error and a timeout are both offline", async () => {
     repo: "notes",
     token: "t",
     timeoutMs: 20,
-    fetch: (url, init) => new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason))),
+    // A request that never answers. The held timer keeps Node's event loop alive until the abort:
+    // AbortSignal.timeout's own timer doesn't (Node 22), and the test would be cancelled.
+    fetch: (url, init) =>
+      new Promise((_, reject) => {
+        const hold = setTimeout(() => {}, 5000);
+        init.signal.addEventListener("abort", () => (clearTimeout(hold), reject(init.signal.reason)));
+      }),
   });
   await assert.rejects(slow.head(), (e) => e.kind === "offline" && e.detail === "timed out");
 });

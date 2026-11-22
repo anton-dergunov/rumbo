@@ -24,7 +24,7 @@ alongside it.
 uv run prototype/serve.py                  # the prototype at http://127.0.0.1:8650/
 uv run prototype/serve.py --host 0.0.0.0   # open it from a tablet or phone on the same network
 uv run prototype/serve.py --sample         # with the synthetic sample vault only
-node --test tests/                         # tests (no npm install needed)
+npm test                                   # tests (no npm install needed)
 node tools/build.mjs                       # build the app into dist/
 ```
 
