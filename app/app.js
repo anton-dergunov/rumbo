@@ -14,6 +14,7 @@ import { createRemote } from "./remote-github.js";
 import { pull, syncOnce, createEngine, attachTriggers } from "./sync.js";
 import { pushRescue, buildZip, shareOrDownload, keepTheirs, keepMine, rescueAndStop } from "./rescue.js";
 import { renderSetup } from "./setup.js";
+import { createNotes } from "./notes.js";
 import { startPwa, onStatus as onPwaStatus, applyUpdate } from "./pwa.js";
 
 const viewport = document.getElementById("viewport");
@@ -29,6 +30,7 @@ const scrolls = new Map();
 let model = null;
 let remote = null;
 let engine = null;
+let notes = null; // the Obsidian notes (notes.js), from the notes repo named at Setup
 
 const repoName = (meta) => (meta.repo || "").split("/").pop() || "Plans";
 
@@ -55,6 +57,7 @@ function render() {
   setEditUiModel(model);
   pickDefaultFile();
   if (state.view === "sync" && lastView !== "sync") loadSyncPage();
+  if (state.view === "note" && runtime.notePage?.want !== state.note) loadNotePage(state.note);
   lastView = state.view;
 
   // Remember every scroller's position by name (data-scroll), so redraws and Back/Forward return
@@ -181,6 +184,7 @@ function savePlace() {
     .setSetting("place", {
       view: state.view === "sync" ? "agenda" : state.view,
       file: state.file,
+      note: state.view === "note" ? state.note : null,
       focusKey: keyOf(state.focus),
       fold: state.fold,
       group: state.group,
@@ -192,8 +196,9 @@ function savePlace() {
 
 function restorePlace(place) {
   if (!place || location.search) return null;
-  state.view = place.view === "file" ? "file" : "agenda";
+  state.view = place.view === "file" || (place.view === "note" && place.note) ? place.view : "agenda";
   state.file = place.file || null;
+  state.note = place.note || null;
   if (FOLDS.includes(place.fold)) state.fold = place.fold;
   if (place.group) state.group = place.group;
   const file = state.file && model.byPath.get(state.file);
@@ -252,6 +257,63 @@ async function loadSyncPage() {
   if (state.view === "sync") render();
 }
 
+// ---------------------------------------------------------------- Obsidian notes
+
+/** The notes of the Obsidian repo named at Setup (its branch is main), with this device's token. */
+async function startNotes() {
+  const o = (await store.getSetting("obsidian").catch(() => null)) || {};
+  runtime.obsidian = { repo: o.repo || "", vault: o.vault || "" };
+  const [owner, repo] = (o.repo || "").split("/");
+  const r = owner && repo && runtime.meta.token ? createRemote({ owner, repo, branch: "main", token: runtime.meta.token }) : null;
+  notes = createNotes({ store, remote: r, repo: o.repo || "" });
+}
+
+// Notes drawn this session, by name (lower case): Back to a note shows it at once, where it was.
+const drawnNotes = new Map();
+let noteSeq = 0;
+let noteHeading = "";
+
+/**
+ * The note page: shown at once if drawn this session, else "Loading…" until it is fetched and
+ * drawn. A drawn note is checked again in the background, and drawn again if it changed.
+ */
+async function loadNotePage(name) {
+  const seq = ++noteSeq;
+  const heading = noteHeading;
+  noteHeading = "";
+  const key = (name || "").toLowerCase();
+  const kept = drawnNotes.get(key);
+  runtime.notePage = kept ? { ...kept, want: name } : { want: name, name, status: "loading" };
+  const show = (page) => {
+    if (seq !== noteSeq) return;
+    runtime.notePage = { ...page, want: name };
+    if (state.view === "note" && state.note === name) render();
+    if (heading && page.el) requestAnimationFrame(() => md?.jumpToHeading(page.el, heading));
+  };
+  if (kept && heading) requestAnimationFrame(() => md?.jumpToHeading(kept.el, heading));
+  if (!notes) await startNotes();
+  const r = await notes.load(name || "");
+  if (seq !== noteSeq) return;
+  if (r.status !== "ok") {
+    if (kept && r.status === "offline") return; // the drawn note stays
+    drawnNotes.delete(key);
+    return show(r);
+  }
+  if (kept && kept.text === r.text) return;
+  md ??= await import("./markdown.js");
+  const el = h("article", { class: "note-body" });
+  md.bindNoteClicks(el, (n, hd) => actions.openNote(n, hd));
+  try {
+    await md.drawNote(el, md.noteHtml(r.text, r), { loadImage: (path) => notes.image(path) });
+  } catch (e) {
+    return show({ status: "error", name: r.name, message: `The note could not be drawn: ${e.message}` });
+  }
+  const page = { status: "ok", name: r.name, path: r.path, text: r.text, el };
+  drawnNotes.set(key, page);
+  show(page);
+}
+let md = null; // markdown.js, loaded with the first note
+
 // ---------------------------------------------------------------- setup
 
 /** What the device check saved on this device (its own database), to prefill Setup once. */
@@ -301,6 +363,8 @@ async function runSetup(v, say) {
     if (old.base && (old.repo !== v.repo || old.branch !== v.branch)) await store.resetReplica();
     await store.setMeta({ repo: v.repo, branch: v.branch, token: v.token, noExpiry: v.noExpiry, tokenExpiry: v.tokenExpiry, device: v.device });
     await store.setSetting("obsidian", { repo: v.notesRepo, vault: v.obsidianVault });
+    notes = null;
+    drawnNotes.clear();
     await pull({ remote: r, store, onProgress: ({ done, total }) => say(total ? `Downloading ${done} of ${total} files…` : "Up to date.") });
     await store.log({ kind: "setup", repo: v.repo, branch: v.branch });
   } catch (e) {
@@ -320,6 +384,16 @@ async function runSetup(v, say) {
 actions.openFile = (path) => update({ view: "file", file: path, focus: null, drawer: false, sheet: null });
 actions.openView = (view) => update({ view, focus: null, drawer: false, sheet: null });
 actions.openSync = () => update({ view: "sync", focus: null, drawer: false, sheet: null });
+/** An Obsidian note in Rumbo, optionally at one of its headings. */
+actions.openNote = (name, heading = "") => {
+  noteHeading = heading;
+  if (state.view === "note" && state.note?.toLowerCase() === name.toLowerCase()) {
+    noteHeading = "";
+    if (heading && runtime.notePage?.el && md) md.jumpToHeading(runtime.notePage.el, heading);
+    return;
+  }
+  update({ view: "note", note: name, focus: null, drawer: false, sheet: null, editing: false });
+};
 actions.reveal = (id) => reveal(id);
 actions.setEditing = (on) => anchored(() => update({ editing: on }));
 actions.openHeading = (path, id) => {
@@ -446,6 +520,7 @@ async function boot() {
 
   model = buildModel(await store.allFiles(), { name: repoName(meta) });
   runtime.pending = await store.pending().catch(() => []);
+  startNotes().catch(() => {});
   const after = restorePlace(place);
   update();
   after?.();

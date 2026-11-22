@@ -1,0 +1,1 @@
+A synthetic Obsidian vault for the tests and the browser checks of the note page (`tests/notes.test.mjs`). The sample Org vault links to these notes by name. Safe to commit: it holds no personal data.

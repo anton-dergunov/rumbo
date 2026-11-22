@@ -12,6 +12,7 @@ import { renderOutline, foldControl, contentsButton, crumbTrail, focusedHeading,
 import { renderAgenda, agendaTools } from "./agenda.js";
 import { syncMark, renderSync, when } from "./sync-ui.js";
 import { VERSION, BUILD } from "./version.js";
+import { obsidianUrl } from "./notes.js";
 
 const THEMES = [
   ["paper", "Paper", "Warm, serif text"],
@@ -117,6 +118,43 @@ function filePane(model, menu) {
 const agendaPane = (model, menu) => pane("agenda-pane", [menu, historyBtns(), agendaTools(), syncMark()], renderAgenda(model), "agenda");
 const syncPane = (model, menu) => pane("sync-pane", [menu, historyBtns(), h("div", { class: "titlebar" }, h("span", { class: "view-title" }, icon("sync"), h("span", { class: "t" }, "Sync")))], renderSync(model), "sync");
 
+// An Obsidian note (real-app.md §6): read-only, online only; "Open in Obsidian" always works.
+const obsidianLink = (name, cls = "btn open-obs") =>
+  h("a", { class: cls, href: obsidianUrl(runtime.obsidian?.vault, name), title: "Open in Obsidian" }, icon("open_in_new"), h("span", { class: "lbl" }, "Open in Obsidian"));
+
+function noteBody(page, name) {
+  const say = (...text) => h("div", { class: "note-say" }, h("p", null, ...text));
+  switch (page.status) {
+    case "ok":
+      return page.el;
+    case "loading":
+      return h("p", { class: "empty pad" }, "Loading the note…");
+    case "missing":
+      return say(`There is no note called “${name}” in the Obsidian vault.`);
+    case "offline":
+      return h("div", { class: "note-say" }, h("p", null, "This note needs GitHub, which can't be reached now. Obsidian has its own copy."), obsidianLink(name, "sy-btn"));
+    case "unset":
+      return h("div", { class: "note-say" }, h("p", null, "No notes repo is set on this device, so Rumbo can't show the note. Add the Obsidian repo in Setup, or open the note in Obsidian."), h("p", { class: "sy-actions" }, obsidianLink(name, "sy-btn"), h("button", { class: "sy-btn", onclick: () => actions.openSetup() }, icon("settings"), "Setup")));
+    default:
+      return h("div", { class: "note-say" }, h("p", null, page.message || "The note could not be shown."), obsidianLink(name, "sy-btn"));
+  }
+}
+
+function notePane(model, menu) {
+  const page = runtime.notePage || { status: "loading" };
+  const name = page.name || state.note || "";
+  const head = [
+    menu,
+    historyBtns(),
+    h("div", { class: "titlebar" }, h("span", { class: "view-title", title: name }, icon("edit_note"), h("span", { class: "t" }, name))),
+    h("span", { class: "spacer" }),
+    syncMark(),
+    obsidianLink(name),
+  ];
+  // Only a drawn note keeps its scroll place; a message or "Loading…" must not overwrite it.
+  return pane("note-pane", head, noteBody(page, name), page.status === "ok" ? `note:${name.toLowerCase()}` : "note-wait");
+}
+
 function overlay(content) {
   return h("div", { class: "overlay", onclick: (e) => e.target === e.currentTarget && update({ sheet: null, drawer: false }) }, content);
 }
@@ -139,7 +177,7 @@ export function renderShell(model, width) {
   if (mode === "rail") app.append(h("section", { class: "pane rail-pane" }, h("div", { class: "pane-scroll", "data-scroll": "rail" }, renderRail(model))));
 
   const menu = mode === "drawer" ? menuBtn() : null;
-  const main = state.view === "file" ? filePane : state.view === "sync" ? syncPane : agendaPane;
+  const main = { file: filePane, sync: syncPane, note: notePane }[state.view] || agendaPane;
   app.append(h("div", { class: "main" }, main(model, menu)));
 
   if (state.drawer) {

@@ -5,7 +5,7 @@
 //   {t:"b"|"i"|"s"|"u", kids:[...]}    *bold* /italic/ +strike+ _underline_ (opt-in)
 //   {t:"verb", v} {t:"code", v}        =verbatim= ~code~ (opt-in)
 //   {t:"link", href, kids}             [[https://…][desc]]  [[https://…]]  bare https://…
-//   {t:"obsidian", v}                  [[obsidian:Note]]
+//   {t:"obsidian", target, v}          [[obsidian:Note]]  [[obsidian:Note][desc]] (target: the note's name)
 //   {t:"file", target, kids}           [[file:…][desc]]  (paths outside the vault; shown, not followed)
 //
 // Emphasis follows Org's border rules: the opening marker comes after start/whitespace/one of -('"{
@@ -67,7 +67,8 @@ export function tokenize(s, opts = {}) {
         const desc = sep >= 0 ? inner.slice(sep + 2) : null;
         flush();
         if (/^obsidian:/i.test(target)) {
-          out.push({ t: "obsidian", v: desc || target.replace(/^obsidian:/i, "") });
+          const name = target.replace(/^obsidian:/i, "");
+          out.push({ t: "obsidian", target: name, v: desc || name });
         } else if (/^https?:/i.test(target)) {
           out.push({ t: "link", href: target, kids: desc ? tokenize(desc, opts) : [{ t: "text", v: target }] });
         } else if (/^file:/i.test(target)) {

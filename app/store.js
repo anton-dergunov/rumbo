@@ -447,6 +447,14 @@ export function openStore({ indexedDB = globalThis.indexedDB, name = DB_NAME, ti
       }),
     setSetting: (key, value) => tx(["settings"], "readwrite", (t) => void t.objectStore("settings").put(value, key)),
 
+    /** The Obsidian repo's note index (notes.js): `{ repo, head, etag, notes, files }`, or undefined. */
+    getNotesIndex: () =>
+      tx(["obsidian"], "readonly", (t) => {
+        const r = t.objectStore("obsidian").get("index");
+        return () => r.result;
+      }),
+    setNotesIndex: (index) => tx(["obsidian"], "readwrite", (t) => void t.objectStore("obsidian").put(index, "index")),
+
     log: (event) => tx(["log"], "readwrite", (t) => addLog(t, event)),
     /** The sync log, oldest first. */
     readLog: () =>

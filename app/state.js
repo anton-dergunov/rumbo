@@ -16,7 +16,8 @@ export const state = {
   editing: false, // edit mode is on (the "mode" variant); kept in the URL but not a history entry
   fold: "tasks",
   file: null, // vault-relative path of the open file
-  view: "agenda", // what the main area shows: a view ("agenda"; later calendar, situations), "file" or "sync"
+  view: "agenda", // what the main area shows: a view ("agenda"; later calendar, situations), "file", "sync" or "note"
+  note: null, // the Obsidian note shown when view is "note", by name
   focus: null, // id of the section the file view is narrowed to (null = whole file)
   group: "list", // agenda: "list" | "file"
   drawer: false,
@@ -34,9 +35,11 @@ export const runtime = {
   updateWaiting: false,
   busy: null, // the way out running now (Sync page), e.g. "Pushing to a rescue branch"
   syncNote: null, // what the last way out did, shown on the Sync page
+  notePage: null, // the note page: { name, status, el, message } (app.js)
+  obsidian: { repo: "", vault: "" }, // the notes repo and the Obsidian vault name, from Setup
 };
 
-const URL_KEYS = ["fold", "file", "view", "focus", "group", "editing"];
+const URL_KEYS = ["fold", "file", "view", "focus", "group", "editing", "note"];
 
 export function readUrl() {
   const p = new URLSearchParams(location.search);
@@ -57,7 +60,7 @@ export const canGoForward = () => navIdx < navMax;
 export function writeUrl(push = false) {
   const p = new URLSearchParams();
   for (const k of URL_KEYS) {
-    const v = k === "editing" ? (state.editing ? "1" : "") : state[k];
+    const v = k === "editing" ? (state.editing ? "1" : "") : k === "note" && state.view !== "note" ? "" : state[k];
     if (v == null || v === "") continue;
     p.set(k, v);
   }
@@ -76,7 +79,7 @@ export function setRenderer(fn) {
 }
 
 // Moving to another file, view or focus is a history entry, so Back and Forward work.
-const NAV_KEYS = ["view", "file", "focus"];
+const NAV_KEYS = ["view", "file", "focus", "note"];
 export function update(patch = {}) {
   const moved = NAV_KEYS.some((k) => k in patch && patch[k] !== state[k]);
   Object.assign(state, patch);
@@ -86,7 +89,7 @@ export function update(patch = {}) {
 
 export function restoreFromUrl(event) {
   navIdx = event?.state?.idx ?? 0;
-  Object.assign(state, { view: "agenda", focus: null, sheet: null, drawer: false, editing: false });
+  Object.assign(state, { view: "agenda", focus: null, note: null, sheet: null, drawer: false, editing: false });
   readUrl();
   renderer();
 }

@@ -109,6 +109,18 @@ test("the Diagnostics page lives at check/, and the self-hosted fonts are precac
   assert.match(b.read("check/index.html"), /href="\.\.\/manifest\.webmanifest"/);
 });
 
+test("the note libraries are precached, and KaTeX's stylesheet names only fonts that ship", () => {
+  const b = freshBuild();
+  const precache = precacheOf(b.read("sw.js"));
+  for (const f of ["markdown.js", "notes.js", "vendor/marked.esm.js", "vendor/purify.es.mjs", "vendor/katex/katex.mjs", "vendor/katex/katex.min.css"]) assert.ok(precache.includes(f), f);
+  const urls = [...b.read("vendor/katex/katex.min.css").matchAll(/url\(([^)]+)\)/g)].map((m) => m[1]);
+  assert.ok(urls.length >= 20);
+  for (const u of urls) {
+    assert.ok(b.files.includes(`vendor/katex/${u}`), u);
+    assert.ok(precache.includes(`vendor/katex/${u}`), u);
+  }
+});
+
 test("every page's CSP allows only itself and api.github.com, and no HTML uses style attributes", () => {
   const b = freshBuild();
   const pages = b.files.filter((f) => f.endsWith(".html"));
@@ -124,5 +136,5 @@ test("every page's CSP allows only itself and api.github.com, and no HTML uses s
     assert.doesNotMatch(html, /\sstyle="/, `${f}: style attribute`);
     assert.doesNotMatch(html, /fonts\.googleapis|fonts\.gstatic/, f);
   }
-  for (const f of b.files.filter((f) => f.endsWith(".js"))) assert.doesNotMatch(b.read(f), /setAttribute\(\s*["']style["']/, `${f}: style attribute set from script`);
+  for (const f of b.files.filter((f) => /\.m?js$/.test(f))) assert.doesNotMatch(b.read(f), /setAttribute\(\s*["']style["']/, `${f}: style attribute set from script`);
 });

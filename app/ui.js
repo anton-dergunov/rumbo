@@ -89,9 +89,23 @@ function renderTokens(tokens, out) {
         out.append(a);
         break;
       }
-      case "obsidian":
-        out.append(h("span", { class: "obs", title: "Obsidian note" }, icon("edit_note"), t.v));
+      case "obsidian": {
+        // A span, not an <a>: agenda titles sit inside a <button>. The tap opens the note in Rumbo.
+        const open = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          actions.openNote(t.target);
+        };
+        out.append(
+          h(
+            "span",
+            { class: "obs", role: "link", tabindex: "0", title: "Obsidian note", onclick: open, onkeydown: (e) => e.key === "Enter" && open(e) },
+            icon("edit_note"),
+            t.v,
+          ),
+        );
         break;
+      }
       case "file":
         out.append(h("span", { class: "extfile", title: t.target }, icon("description"), renderTokens(t.kids, h("span"))));
         break;

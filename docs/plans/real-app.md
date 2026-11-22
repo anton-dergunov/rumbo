@@ -56,8 +56,9 @@ Sibling projects are cited by name (`agentic-org-planner/…`, `calorie-logger/�
 
 | Library | Use | Licence |
 |---|---|---|
-| marked | Markdown for Obsidian notes (via carrel's module) | MIT |
-| DOMPurify | Sanitising rendered notes | Apache 2.0 / MPL 2.0 |
+| marked 18.1.0 | Markdown for Obsidian notes (via carrel's module) | MIT |
+| DOMPurify 3.4.16 | Sanitising rendered notes | Apache 2.0 / MPL 2.0 |
+| KaTeX 0.19.0 | Maths in notes (woff2 fonts only; three style attributes set through the CSSOM) | MIT |
 | node-diff3 3.2.1 | 3-way merge of a file, diffs, conflict hunks | MIT |
 | fflate 0.8.3 | The "download everything" zip (only `zipSync`) | MIT |
 
@@ -366,19 +367,21 @@ Unchanged from CLAUDE.md:
 
 The vault links to notes as `[[obsidian:Note name]]`: 491 links to 357 notes, always a bare note name, no folder, no `.md`. Every note name is unique in the Obsidian vault (its `AGENTS.md` requires it, and 1,359 notes have no collisions, even ignoring case), so a name finds exactly one file.
 
-- **A tap on such a link shows the note in Rumbo**, read-only, with an **Open in Obsidian** button.
+- **A tap on such a link shows the note in Rumbo**, read-only, with an **Open in Obsidian** button. The note is a page of its own (`view=note&note=<name>`), so Back and Forward work as for files, and a wiki link in it opens the next note the same way.
 - **Open in Obsidian** uses `obsidian://open?vault=<vault name>&file=<note name>`, the link Emacs opens (`agentic-org-planner/lisp/ps-links.el:15-21`). Obsidian documents it for iOS and Android too. Some users report it opening the last note instead when Obsidian was not running; step 1 tests it on both devices. The vault name is a per-device setting (`obsidian` on the Mac).
 - **How the note is fetched:**
-  - The Obsidian repo's tree (`GET /git/trees/{head}?recursive=1`) gives a name → path index. It is kept in IndexedDB and refreshed when that repo's head changes.
-  - The note itself is fetched through the contents API (`Accept: application/vnd.github.raw+json`).
-  - Images it embeds (`![[picture.png]]`, in `90 Meta/Images/`) are fetched as blobs and shown through object URLs.
-- **Rendering** reuses carrel's browser Markdown module (`carrel/src/carrel/static/markdown.js`: marked, DOMPurify, Obsidian callouts, maths). Rumbo adds:
-  - `[[wiki links]]` (to other notes, opened the same way);
-  - `![[embeds]]` for images;
-  - footnotes;
-  - leaving front matter out.
-- **Not cached:** offline, a tap offers only "Open in Obsidian".
-- About 12 links name notes that no longer exist: they show as "not found".
+  - The Obsidian repo's tree (`GET /git/trees/{head}?recursive=1`) gives a name → path index, skipping dot folders. It is kept in IndexedDB (the `obsidian` store, with the repo's name, so another repo's index is never used) and refreshed when that repo's head changes. The head is checked with its ETag (a free 304) at most once a minute. The branch is `main`.
+  - The note and the images it embeds (`![[picture.png]]`, in `90 Meta/Images/`) are fetched as blobs by the SHA the index gives, so they always match the indexed tree. Images are shown through object URLs. Both are kept in memory for the session, never on the device.
+- **Rendering** reuses carrel's browser Markdown module (`carrel/src/carrel/static/markdown.js`: marked, DOMPurify, Obsidian callouts, maths with KaTeX, loaded only when a note has maths). Rumbo adds, each as a marked extension so nothing changes inside code:
+  - `[[wiki links]]` with an alias, a heading or both, found by name in any case; `[[#Heading]]` scrolls within the note. One not in the vault is shown as not found (78 names across the vault, notes never written);
+  - `![[embeds]]` for images (with a width); an embedded note is a link to it, other files are named only;
+  - footnotes, numbered in order of use, listed at the end, with a way back;
+  - `==highlight==`, `%%comments%%` left out, front matter left out, and a single newline as a line break, as in Obsidian;
+  - a wiki link's `|` in a table works unescaped, as Obsidian allows.
+- **Style attributes** in a note's raw HTML (`<mark style="…">`, 50 in the vault) are stripped before any parser sees them: the CSP forbids them, and WebKit reports a violation even while DOMPurify parses them in an inert document.
+- **Mermaid diagrams stay as their source.** Drawing them would need `style-src 'unsafe-inline'` for Mermaid's SVG `<style>`, and 3.4 MB, for 3 linked notes.
+- **Not cached:** offline, a note not read this session offers only "Open in Obsidian". A note read this session stays.
+- 12 links name notes that no longer exist: they show as "not found".
 - `[[file:~/…]]` links point at the Mac's disk. They show as plain text.
 
 ## 7. Task icons

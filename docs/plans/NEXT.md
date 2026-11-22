@@ -19,8 +19,8 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 | 4 | 4a | `tests/fake-github.mjs` (its write side; session 2 made the read side) and the scenario harness (the Emacs actor, a second replica), then local commits (folding edits 3 s apart), push, the lost-response and interrupted-sync cases | §3 (Commit and push, engine, edge cases), §8 (fake, scenarios) | **done** |
 | 5 | 4b | Rebase (replay, then node-diff3), the conflict screen, rescue branch, reset, the zip, seeded random interleavings, `tools/e2e-github.mjs` | §3 (rebase), §4, §8 | **done** |
 | — | owner | Run `tools/e2e-github.mjs` on a throwaway repo (below) | — | **done** |
-| 6 | 5 | Obsidian notes: `notes.js`, carrel's Markdown module, wiki links, embeds, footnotes | §6 | next |
-| 7 | 6 | Task icons (a session in `agentic-org-planner`), the on-device fallback model (below), then hardening on the devices | §7, §9 (iOS details) | |
+| 6 | 5 | Obsidian notes: `notes.js`, carrel's Markdown module, wiki links, embeds, footnotes | §6 | **done** |
+| 7 | 6 | Task icons (a session in `agentic-org-planner`), the on-device fallback model (below), then hardening on the devices | §7, §9 (iOS details) | next |
 
 ## Later (after the sessions above)
 - **Sync details from Settings** (the owner, 2026-11-22): a way from Settings to fuller sync statistics. The Sync page is reachable from Settings already; this would add more (merge commits counted, rate-limit use, pull timings, history per file).
@@ -120,6 +120,57 @@ It shows the blank-line habit of each cell, counted from the vault, then the hea
    ```
 
 ## Hand-off
+
+### Session 6 (2026-11-22)
+**Done**
+- **Vendored** into `app/vendor/`, with their licences and README rows: marked 18.1.0, DOMPurify 3.4.16 and KaTeX 0.19.0 (carrel's versions, 7–8 weeks old). KaTeX ships its `.woff2` fonts only, and its three `setAttribute("style", …)` calls set `style.cssText` instead, so the CSP allows them.
+- **`app/markdown.js`**, adapted from carrel's module:
+  - `noteHtml` is pure and tested. It handles wiki links (alias, heading, `[[#Heading]]`, `.md`, any case, not found), image embeds with a width, note and other embeds, footnotes in order of use, `==highlight==`, `%%comments%%`, maths placeholders, front matter left out, and single newlines as breaks. Each is a marked extension, so code is untouched.
+  - `drawNote` runs DOMPurify, then callouts, tables, external links in a new tab, KaTeX (a dynamic import) and images.
+  - `bindNoteClicks` and `jumpToHeading` scroll inside the pane, never through the URL's hash.
+- **`app/notes.js`:**
+  - the index from the Obsidian repo's tree, stored in the `obsidian` store with the repo's name;
+  - the head is checked with its ETag at most once a minute;
+  - `load(name)` gives ok, missing, offline, unset or error;
+  - images become object URLs;
+  - notes and images are fetched as blobs by SHA and kept in memory for the session.
+  - `store.js` gains `getNotesIndex` and `setNotesIndex` (no schema change).
+- **The note page:**
+  - `view=note&note=<name>`, a history entry, restored on reopen. The header has the note's name in the title style and "Open in Obsidian" (icon only on the phone).
+  - A note drawn this session shows at once on Back, where it was, and is re-checked in the background.
+  - `[[obsidian:…]]` links are tappable everywhere, agenda notes included. They are spans with `role="link"`, because agenda titles sit inside a button. The token now keeps the note's name when the link has a description.
+- **Tests:** 213 pass with `npm install`. New: `markdown` (19), `notes` (11, on two fakes: the vault and the Obsidian repo), and a build test for the note libraries and KaTeX's fonts.
+  - The build's style-attribute check now covers `.mjs` too.
+  - `tests/sample-notes/` is a synthetic Obsidian vault holding the four notes the sample Org vault links to.
+  - `fake-github.mjs` gains `routeFakes` and `readFolder`.
+- **The real Obsidian vault, read-only and in memory:** all 1,359 notes render with no error in 0.7 s. No `[[…]]` is left unconverted outside code, and no style attribute survives. 108 links (78 names) are notes never written, which is what Obsidian shows too.
+- **Checked in WebKit,** served under `/rumbo/` against both fakes:
+  - Setup with the notes repo;
+  - a link in a file, and one in an agenda row's notes, open the note;
+  - the callout, the maths and its fonts, the table, the footnote and its jump, the same-note heading jump, `<mark style>` without its style, the SVG embed from a blob, Mermaid as source;
+  - a wiki link to the next note, Back, and a heading link in another note;
+  - a missing note, and offline with Open in Obsidian;
+  - no sideways scroll at the three sizes; the night theme.
+  No console errors from the app.
+
+**Findings and decisions**
+- **WebKit logs a CSP violation for a `style` attribute even while DOMPurify parses it** in an inert document (`DOMParser` and `createHTMLDocument` alike). So `noteHtml` strips style attributes from raw HTML in marked's `html` renderer, before any parser sees them.
+- **Mermaid stays as source:** its SVG needs inline `<style>` (CSP), and it is 3.4 MB for 3 linked notes. No syntax highlighting either.
+- **Notes come as blobs by SHA, not through the contents API.** They match the indexed tree, use one code path with the images, and can be kept by SHA. `remote.raw` is still used by the check page.
+- **A name missing from a stored index that couldn't be checked counts as offline, not missing:** it may be a new note.
+- **The notes repo's branch is `main`**, fixed in `app.js` `startNotes`. Make it a Setup field if that ever changes.
+- A table row's `[[Note|alias]]` without the `\` that Obsidian asks for (one note in the vault) is escaped first, so it stays one link.
+- **Testing notes:**
+  - `wait_for_function` must be given a function (`"() => …"`): an expression string is `eval`ed, which the app's CSP refuses.
+  - Playwright's screenshot stylesheet is still the only "Refused to apply a stylesheet" error.
+
+**Left for later sessions**
+- Session 7, on the devices:
+  - the note page on the iPad and the phone (KaTeX fonts, images, the share of the width);
+  - "Open in Obsidian" from the note page, cold and warm (the device check opened the right note);
+  - a long real note with several embeds, for memory and scrolling.
+- The device check (`app/check/check.js`) keeps its own small index code; it could use `noteIndex` when next touched.
+- A heading jump can land a little short when images above it finish loading afterwards (their height is unknown until then).
 
 ### Session 5 (2026-11-22)
 **Done**

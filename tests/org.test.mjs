@@ -101,6 +101,10 @@ test("inline: links", () => {
   assert.equal(t[1].href, "https://arxiv.org/abs/2407.01449");
   assert.equal(t[3].t, "obsidian");
   assert.equal(t[3].v, "NDCG");
+  assert.equal(t[3].target, "NDCG");
+  // A description is what shows; the note's name is still what opens.
+  const described = tokenize("[[obsidian:Financial plan][the plan]]")[0];
+  assert.deepEqual([described.t, described.target, described.v], ["obsidian", "Financial plan", "the plan"]);
   const bare = tokenize("Russian edition: https://example.com/books/x/. Next");
   assert.equal(bare[1].href, "https://example.com/books/x/");
   assert.equal(tokenize("(see https://en.wikipedia.org/wiki/Foo_(bar))")[1].href, "https://en.wikipedia.org/wiki/Foo_(bar)");

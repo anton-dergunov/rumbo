@@ -325,3 +325,28 @@ export function createFakeGitHub({ owner = "me", repo = "vault", branch = "main"
 
   return fake;
 }
+
+/** One `fetch` for several fakes (the vault and the Obsidian repo), routed by the repo in the path. */
+export function routeFakes(...fakes) {
+  return (url, init) => {
+    const path = decodeURIComponent(new URL(url).pathname);
+    const fake = fakes.find((f) => path.startsWith(`/repos/${f.owner}/${f.repo}/`)) || fakes[0];
+    return fake.fetch(url, init);
+  };
+}
+
+/** A folder's files as `{ path: bytes }`, for `push` (the sample vaults). */
+export async function readFolder(dir) {
+  const { readdirSync, readFileSync, statSync } = await import("node:fs");
+  const { join, relative, sep } = await import("node:path");
+  const out = {};
+  const walk = (d) => {
+    for (const name of readdirSync(d)) {
+      const p = join(d, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else out[relative(dir, p).split(sep).join("/")] = new Uint8Array(readFileSync(p));
+    }
+  };
+  walk(dir);
+  return out;
+}
