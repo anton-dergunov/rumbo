@@ -95,45 +95,43 @@ export const nodeIdentity = (nd, lines) => identity(nd.h.title, lines.slice(nd.b
 /**
  * The rule cell for the boundary gap before a heading at `level`, after the heading `pred`
  * ({level, hasBody}, or null for the first heading of the file); `section` when the heading is not
- * a task. The cells of Emacs's `ps/blank-lines-rule-cell`, with two changes:
- *   - level 3 gets the same cells as level 2, by what precedes it (the parent's text, a closed
- *     subtree, a sibling), so a level-3 habit is learnt rather than assumed; 4 and deeper are one cell;
- *   - a section after its sibling is counted apart from a task: it starts a new part (13 of 17
- *     level-2 sections have a blank line in the vault), a task after a task hardly ever does (1 of
- *     1,117). So the sibling -prose and -bare cells are for tasks.
+ * a task. Built from the cells of Emacs's `ps/blank-lines-rule-cell`, by shape alone below level 1:
+ *   - l1                  a top-level heading (always a blank line in the vault);
+ *   - after-preamble      the first heading of the file;
+ *   - parent-prose/-bare  the first child, after its parent's own text (or a bare parent);
+ *   - from-deeper-…       after a closed subtree;
+ *   - sibling-section     a section after its sibling: it starts a new part;
+ *   - sibling-prose/-bare a task after its sibling, with or without notes.
+ * The level doesn't take part: once the owner made the vault consistent (2026-11-22), every shape
+ * agreed at levels 2, 3 and 4 alike (for example the first child after its parent's text: 174 of
+ * 174, 33 of 33, 2 of 2), so one count per shape also covers the deep levels with few examples.
  */
 export function cellOf(level, pred, section = false) {
   if (level === 1) return "l1";
-  if (level >= 4) return "l4+";
-  const l = `l${level}`;
-  if (!pred) return `${l}-after-preamble`;
+  if (!pred) return "after-preamble";
   const prose = pred.hasBody ? "prose" : "bare";
-  if (pred.level < level) return `${l}-parent-${prose}`;
-  if (pred.level > level) return `${l}-from-deeper-${prose}`;
-  return section ? `${l}-sibling-section` : `${l}-sibling-${prose}`;
+  if (pred.level < level) return `parent-${prose}`;
+  if (pred.level > level) return `from-deeper-${prose}`;
+  return section ? "sibling-section" : `sibling-${prose}`;
 }
 
-const SHAPES = ["after-preamble", "parent-prose", "parent-bare", "from-deeper-prose", "from-deeper-bare", "sibling-prose", "sibling-bare", "sibling-section"];
-export const CELLS = ["l1", ...SHAPES.map((x) => `l2-${x}`), ...SHAPES.map((x) => `l3-${x}`), "l4+"];
+export const CELLS = ["l1", "after-preamble", "parent-prose", "parent-bare", "from-deeper-prose", "from-deeper-bare", "sibling-prose", "sibling-bare", "sibling-section"];
 
 /**
  * Before the vault is counted: a blank line marks a change of shape. One before a level-1 heading,
- * before the first heading, before a level-2 heading that follows its parent's text or closes a
- * subtree, and before a level-2 section after its sibling; none elsewhere (§5).
+ * before the first heading, after a parent's text, after a closed subtree, and before a section
+ * that follows its sibling; none between tasks (§5).
  */
 export const DEFAULT_RULE = {
   l1: 1,
-  "l2-after-preamble": 1,
-  "l2-parent-prose": 1,
-  "l2-parent-bare": 0,
-  "l2-from-deeper-prose": 1,
-  "l2-from-deeper-bare": 1,
-  "l2-sibling-prose": 0,
-  "l2-sibling-bare": 0,
-  "l2-sibling-section": 1,
-  // Level 3: none before any of them (§5's table: the vault's majority in every level-3 shape).
-  ...Object.fromEntries(SHAPES.map((x) => [`l3-${x}`, 0])),
-  "l4+": 0,
+  "after-preamble": 1,
+  "parent-prose": 1,
+  "parent-bare": 0,
+  "from-deeper-prose": 1,
+  "from-deeper-bare": 1,
+  "sibling-prose": 0,
+  "sibling-bare": 0,
+  "sibling-section": 1,
 };
 
 /** Fewest examples a counted cell needs before it is used, as in Emacs (ps/blank-lines-rule-min-samples). */

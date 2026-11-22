@@ -44,25 +44,22 @@ test("who owns a run: a bare heading's lead, a boundary gap, bof and eof", () =>
   assert.deepEqual(r.kinds, ["bof", "sep", "eof"]);
 });
 
-test("the cells are Emacs's, with level 3 apart from 4 and deeper", () => {
+test("the cells: level 1, then the shape alone at any depth", () => {
   assert.equal(cellOf(1, null), "l1");
   assert.equal(cellOf(1, { level: 3, hasBody: true }), "l1");
-  assert.equal(cellOf(2, null), "l2-after-preamble");
-  assert.equal(cellOf(2, { level: 1, hasBody: true }), "l2-parent-prose");
-  assert.equal(cellOf(2, { level: 1, hasBody: false }), "l2-parent-bare");
-  assert.equal(cellOf(2, { level: 3, hasBody: false }), "l2-from-deeper-bare");
-  assert.equal(cellOf(2, { level: 2, hasBody: true }), "l2-sibling-prose");
+  assert.equal(cellOf(2, null), "after-preamble");
+  assert.equal(cellOf(2, { level: 1, hasBody: true }), "parent-prose");
+  assert.equal(cellOf(2, { level: 1, hasBody: false }), "parent-bare");
+  assert.equal(cellOf(2, { level: 3, hasBody: false }), "from-deeper-bare");
+  assert.equal(cellOf(2, { level: 2, hasBody: true }), "sibling-prose");
   // A section after its sibling starts a new part; a task after a task does not.
-  assert.equal(cellOf(2, { level: 2, hasBody: true }, true), "l2-sibling-section");
-  assert.equal(cellOf(2, { level: 1, hasBody: true }, true), "l2-parent-prose", "only the sibling cells are split");
-  // Level 3 has the same shapes as level 2: a task after a section's description is its own cell.
-  assert.equal(cellOf(3, { level: 2, hasBody: true }), "l3-parent-prose");
-  assert.equal(cellOf(3, { level: 4, hasBody: false }), "l3-from-deeper-bare");
-  assert.equal(cellOf(3, { level: 3, hasBody: true }), "l3-sibling-prose");
-  assert.equal(cellOf(3, { level: 3, hasBody: false }, true), "l3-sibling-section");
-  assert.equal(cellOf(3, null), "l3-after-preamble");
-  assert.equal(cellOf(4, null, true), "l4+");
-  assert.equal(cellOf(5, null), "l4+");
+  assert.equal(cellOf(2, { level: 2, hasBody: true }, true), "sibling-section");
+  assert.equal(cellOf(2, { level: 1, hasBody: true }, true), "parent-prose", "only the sibling cells are split");
+  // The same shapes at level 3 and 4 are the same cells: a task after its section's description.
+  assert.equal(cellOf(3, { level: 2, hasBody: true }), "parent-prose");
+  assert.equal(cellOf(4, { level: 3, hasBody: true }), "parent-prose");
+  assert.equal(cellOf(4, { level: 4, hasBody: false }, true), "sibling-section");
+  assert.equal(cellOf(6, { level: 6, hasBody: true }), "sibling-prose");
   assert.deepEqual(Object.keys(DEFAULT_RULE).sort(), [...CELLS].sort());
 });
 
@@ -72,10 +69,10 @@ test("counting: a fixture with known answers", () => {
   assert.equal(counts.files, 1);
   assert.deepEqual(counts.cells, {
     l1: { 1: 2 },
-    "l2-sibling-bare": { 0: 1 },
-    "l2-parent-prose": { 1: 1 },
-    "l2-sibling-section": { 0: 1 },
-    "l2-from-deeper-bare": { 1: 1 },
+    "sibling-bare": { 0: 1 },
+    "parent-prose": { 1: 1 },
+    "sibling-section": { 0: 1 },
+    "from-deeper-bare": { 1: 1 },
   });
   // a1 under bare A and c under bare b2 sit in leads, which are not counted.
   assert.deepEqual(boundaryGaps(d).map((g) => g.node.h.title), ["A", "a2", "B", "b1", "b2", "b3"]);
@@ -84,12 +81,12 @@ test("counting: a fixture with known answers", () => {
 
 test("predict: the majority with 5 examples or more, else keep; the default before counting", () => {
   assert.equal(predict(null, "l1"), 1);
-  assert.equal(predict(null, "l2-sibling-bare"), 0);
-  assert.equal(predict({ cells: { l3: { 0: 4 } } }, "l3"), null, "4 examples are not enough");
-  assert.equal(predict({ cells: { l3: { 0: 4, 1: 1 } } }, "l3"), 0);
-  assert.equal(predict({ cells: { l3: { 0: 1, 1: 5 } } }, "l3"), 1, "the vault's own habit wins over the default");
+  assert.equal(predict(null, "sibling-bare"), 0);
+  assert.equal(predict({ cells: { "sibling-bare": { 0: 4 } }  }, "sibling-bare"), null, "4 examples are not enough");
+  assert.equal(predict({ cells: { "sibling-bare": { 0: 4, 1: 1 } }  }, "sibling-bare"), 0);
+  assert.equal(predict({ cells: { "sibling-bare": { 0: 1, 1: 5 } }  }, "sibling-bare"), 1, "the vault's own habit wins over the default");
   assert.equal(predict({ cells: {} }, "l1"), null, "counted, but no examples: keep");
-  assert.equal(predict({ cells: { "l2-sibling-bare": { 0: 3, 1: 3 } } }, "l2-sibling-bare"), 0, "a tie goes to the default");
+  assert.equal(predict({ cells: { "sibling-bare": { 0: 3, 1: 3 } } }, "sibling-bare"), 0, "a tie goes to the default");
   assert.equal(predict({ cells: { l1: { 1: 3, 2: 3 } } }, "l1"), 1);
   assert.deepEqual(cellSummary({ cells: { l1: { 0: 2, 1: 9, 2: 1 } } }, "l1"), { total: 12, best: 1, bestCount: 9 });
 });
@@ -117,9 +114,9 @@ test("the spacing report lists the headings that go against their cell", async (
     { path: "b.org", text: "* X\n\n* Y\n* Z\n" },
   ];
   const out = spacingReport(files);
-  assert.ok(out.some((l) => /^l2-sibling-section\s+5\s+0: 4, 1: 1\s+0 {2}\(80%\)$/.test(l)), out.join("\n"));
+  assert.ok(out.some((l) => /^sibling-section\s+5\s+0: 4, 1: 1\s+0 {2}\(80%\)$/.test(l)), out.join("\n"));
   assert.ok(out.some((l) => /^l1\s+2\s+.*keep \(too few; default 1\)$/.test(l)));
   assert.ok(out.includes("1 headings go against their cell (6 follow it). Each is file:line — cell — what it has or lacks:"));
-  assert.ok(out.includes("a.org:8 — l2-sibling-section — has a blank"));
-  assert.deepEqual(spacingReport(files, "b.org").filter((l) => l.includes(" — l")), [], "--file limits the list, not the counts");
+  assert.ok(out.includes("a.org:8 — sibling-section — has a blank"));
+  assert.deepEqual(spacingReport(files, "b.org").filter((l) => /:\d+ — /.test(l)), [], "--file limits the list, not the counts");
 });

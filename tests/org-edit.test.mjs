@@ -377,7 +377,7 @@ test("a heading that stays in the same kind of place keeps its blank lines: a se
   // Shaped like a real file: a run of tasks with notes, then a blank line, then a section of their parent.
   const raw = "* Fundamentals\nWhy.\n\n** TODO Backprop\nnote\n** TODO Autodiff\nnote\n** TODO Residuals\nnote\n\n** Activation functions\n*** TODO Race them\n\n** Initialization\n";
   const d = parseOrg(raw);
-  const counted = { cells: { "l2-sibling-prose": { 0: 50 }, "l2-sibling-section": { 0: 1, 1: 1 } }, files: 1 }; // the section cell has too few examples
+  const counted = { cells: { "sibling-prose": { 0: 50 }, "sibling-section": { 0: 1, 1: 1 } }, files: 1 }; // the section cell has too few examples
   for (const ctx of [{}, { rule: counted }]) {
     // Reordering the tasks above it leaves the blank before the section where it is.
     let r = moveDown(d.lines, d, find(d, "Autodiff"), ctx);
