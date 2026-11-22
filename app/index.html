@@ -34,7 +34,7 @@
         <ol>
           <li>Add it to the Home Screen (iPad: Share → Add to Home Screen; Android: ⋮ → Add to Home screen / Install) and open it from there.</li>
           <li>Fill in the repos and the token, then <b>Save and run the checks</b>.</li>
-          <li>Close the app, turn on Airplane mode, open it again: it should load, and the list of opens should say "offline".</li>
+          <li>Close the app fully (swipe it out of the app switcher, or it only resumes and no open is recorded), turn on Airplane mode with Wi-Fi off, and open it again from the Home Screen: it should load from the service worker, and the list of opens should say "offline" or "GitHub unreachable" (Android may still say "online"). Copy the report after this step.</li>
           <li>Try the Obsidian link twice: once with Obsidian closed, once with it open. Note what happened.</li>
           <li><b>Copy the report</b> and paste it into <code>docs/plans/NEXT.md</code>. The report holds no vault text or file names.</li>
         </ol>
@@ -48,6 +48,7 @@
           <label>Notes repo (Obsidian) <input name="notesRepo" placeholder="owner/repo" spellcheck="false" autocapitalize="off" /></label>
           <label>Token <input name="token" type="password" placeholder="github_pat_…" spellcheck="false" autocapitalize="off" /></label>
           <label>Token expires on <input name="tokenExpiry" type="date" /></label>
+          <label class="tick"><input name="tokenNoExpiry" type="checkbox" /> The token has no expiry</label>
           <label>Obsidian vault name <input name="obsidianVault" placeholder="obsidian" spellcheck="false" autocapitalize="off" /></label>
           <label>A note to open <input name="noteName" placeholder="A note's name, without .md" spellcheck="false" autocapitalize="off" /></label>
           <p class="row">

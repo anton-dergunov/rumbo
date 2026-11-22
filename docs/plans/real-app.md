@@ -100,6 +100,7 @@ Git it is. In the browser, **isomorphic-git is ruled out**: github.com's git end
 - OAuth's device flow is not possible from a browser: `github.com/login/*` has no CORS.
 - The token is stored in IndexedDB on the device, in the app's origin.
 - GitHub reports a token's expiry in the `github-authentication-token-expiration` response header, but its CORS policy doesn't expose that header to a browser (checked 2026-11-22). So Setup asks for the expiry date GitHub shows when the token is made, and Rumbo shows a warning two weeks ahead. A `401` means "sign in again", and nothing local is lost.
+- **Tokens without an expiry are supported.** Setup offers "The token has no expiry" in place of a date (the owner's token is one). Rumbo then shows no expiry warning, and Settings says the token never expires and that revoking it on GitHub is how to cut off a lost device. A `401` still means "sign in again".
 - Protecting the token:
   - a strict Content Security Policy;
   - no third-party scripts;
@@ -177,6 +178,7 @@ The result of 2 or 3 also has to pass the edit invariants (§5) before it replac
   - the app becoming visible, and window focus;
   - `online`;
   - every 60 s while visible.
+- `navigator.onLine` is a hint, never the answer. Android Chrome reported "online" with every radio off (device check, 2026-11-22), while WebKit reported "offline" correctly. "Offline" on screen comes from the last request's failure class. When `onLine` is false the app may skip a sync, since false is reliable; a true proves nothing.
 - Backoff on failures that are expected to clear: 5 s, 15 s, 60 s, then every minute.
 - Failure classes, after Emacs's (`agentic-org-planner/lisp/ps-git-sync.el:99-166`). Each one says what happened in one line, and what the owner can do about it:
 

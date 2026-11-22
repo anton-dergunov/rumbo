@@ -180,7 +180,10 @@ async function vaultChecks(s) {
     const t0 = performance.now();
     head = await remote.head();
     report("head", "Read the branch head", "pass", `${head.sha.slice(0, 7)} in ${Math.round(performance.now() - t0)} ms`);
+    noteReach("reached");
   } catch (e) {
+    // Any answer from GitHub, even a 401, means it was reached.
+    if (e?.kind) noteReach(e.kind === "offline" ? "unreachable" : "reached");
     return report("head", "Read the branch head", "fail", errorText(e));
   }
 
@@ -197,7 +200,9 @@ async function vaultChecks(s) {
     "expiry",
     "Token expiry header readable",
     "info",
-    remote.tokenExpiry ? `yes: ${remote.tokenExpiry}` : `no (expected: GitHub's CORS policy hides it); entered here: ${s.tokenExpiry || "not set"}`,
+    remote.tokenExpiry
+      ? `yes: ${remote.tokenExpiry}`
+      : `no (expected: GitHub's CORS policy hides it); entered here: ${s.tokenNoExpiry ? "no expiry" : s.tokenExpiry || "not set"}`,
   );
 
   let entries;
@@ -278,16 +283,27 @@ async function notesChecks(s) {
 // ---------------------------------------------------------------------------------------------
 // Settings, the Obsidian link, opens and the report.
 
-const FIELDS = ["vaultRepo", "branch", "notesRepo", "token", "tokenExpiry", "obsidianVault", "noteName"];
+const FIELDS = ["vaultRepo", "branch", "notesRepo", "token", "tokenExpiry", "tokenNoExpiry", "obsidianVault", "noteName"];
 const form = () => $("#setup");
 
 function readForm() {
   const f = form();
-  return Object.fromEntries(FIELDS.map((k) => [k, f.elements[k].value.trim()]));
+  return Object.fromEntries(FIELDS.map((k) => [k, f.elements[k].type === "checkbox" ? f.elements[k].checked : f.elements[k].value.trim()]));
 }
 
 function fillForm(s) {
-  for (const k of FIELDS) if (s?.[k]) form().elements[k].value = s[k];
+  for (const k of FIELDS) {
+    const el = form().elements[k];
+    if (el.type === "checkbox") el.checked = !!s?.[k];
+    else if (s?.[k]) el.value = s[k];
+  }
+  syncExpiry();
+}
+
+// A token made without an expiry has no date to enter.
+function syncExpiry() {
+  const f = form();
+  f.elements.tokenExpiry.disabled = f.elements.tokenNoExpiry.checked;
 }
 
 function updateObsidianLink() {
@@ -297,7 +313,21 @@ function updateObsidianLink() {
 }
 
 let opens = [];
+let currentOpen = null;
 let pwaStatus = null;
+
+// `navigator.onLine` can say "online" with every radio off (Android Chrome, 2026-11-22), so each
+// open also records whether this open's first request actually reached GitHub.
+function noteReach(github) {
+  if (!currentOpen || currentOpen.github) return;
+  currentOpen.github = github;
+  kv.set("opens", opens).catch(() => {});
+  renderOpens();
+  renderReport();
+}
+
+const offline = (o) => !o.online || o.github === "unreachable";
+const reachText = (o) => (o.github ? `, GitHub ${o.github}` : "");
 
 function renderOpens() {
   $("#opens").replaceChildren(
@@ -309,9 +339,9 @@ function renderOpens() {
         li.className = "info";
         const mark = document.createElement("span");
         mark.className = "mark";
-        mark.textContent = o.online ? "·" : "✈";
+        mark.textContent = offline(o) ? "✈" : "·";
         const t = document.createElement("span");
-        t.textContent = `${new Date(o.at).toLocaleString()} — ${o.online ? "online" : "offline"}, ${o.controlled ? "from the service worker" : "from the network"}, ${o.standalone ? "Home Screen" : "browser"}`;
+        t.textContent = `${new Date(o.at).toLocaleString()} — the browser says ${o.online ? "online" : "offline"}${reachText(o)}, ${o.controlled ? "from the service worker" : "from the network"}, ${o.standalone ? "Home Screen" : "browser"}`;
         li.append(mark, t);
         return li;
       }),
@@ -327,7 +357,7 @@ function renderReport() {
     ...[...checks.values()].map((c) => `${MARKS[c.status]} ${c.title}${c.detail ? ` — ${c.detail}` : ""}`),
     "",
     "Opens:",
-    ...opens.map((o) => `  ${o.at} ${o.online ? "online" : "OFFLINE"} ${o.controlled ? "sw" : "net"} ${o.standalone ? "home-screen" : "browser"}`),
+    ...opens.map((o) => `  ${o.at} ${o.online ? "online" : "OFFLINE"} ${o.controlled ? "sw" : "net"} ${o.standalone ? "home-screen" : "browser"}${o.github ? ` github-${o.github}` : ""}`),
     "",
     "Obsidian link:",
     ...manual.map((m) => `  ${m}`),
@@ -356,7 +386,8 @@ async function main() {
 
   try {
     opens = ((await kv.get("opens")) || []).slice(-9);
-    opens.push({ at: new Date().toISOString(), online: navigator.onLine, controlled: !!navigator.serviceWorker?.controller, standalone: standalone() });
+    currentOpen = { at: new Date().toISOString(), online: navigator.onLine, controlled: !!navigator.serviceWorker?.controller, standalone: standalone() };
+    opens.push(currentOpen);
     await kv.set("opens", opens);
     fillForm(await kv.get("settings"));
     for (const el of document.querySelectorAll("select.manual")) el.value = (await kv.get(el.name)) || "";
@@ -368,6 +399,7 @@ async function main() {
   updateObsidianLink();
 
   form().addEventListener("input", updateObsidianLink);
+  form().elements.tokenNoExpiry.addEventListener("change", syncExpiry);
   form().addEventListener("submit", (ev) => {
     ev.preventDefault();
     run().catch((e) => report("run", "Running the checks", "fail", errorText(e)));

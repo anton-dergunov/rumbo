@@ -60,6 +60,16 @@ label {
   color: var(--ink-2);
 }
 
+label.tick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+input:disabled {
+  opacity: 0.5;
+}
+
 input,
 select,
 textarea {
@@ -73,6 +83,15 @@ textarea {
   color: var(--ink);
   /* 16px stops iOS from zooming into a focused field. */
   font: 16px / 1.35 var(--font-ui);
+}
+
+input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  accent-color: var(--ink);
 }
 
 textarea {
