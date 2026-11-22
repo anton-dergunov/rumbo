@@ -28,7 +28,7 @@ const LOG_MAX = 100;
 export const FOLD_MS = 3000;
 
 /** Meta keys that describe the replica's base; Reset forgets them, Setup's keys stay. */
-export const BASE_KEYS = ["base", "tree", "etag", "baseCommit", "lastCheck", "lastError"];
+export const BASE_KEYS = ["base", "tree", "etag", "baseCommit", "lastCheck", "lastError", "conflict"];
 
 export class StoreError extends Error {
   /** code: "stale" (the file changed since the edit was made), "pending-changed" (a pull would overwrite an edited file), "gone", or null. */
@@ -332,17 +332,58 @@ export function openStore({ indexedDB = globalThis.indexedDB, name = DB_NAME, ti
      * log entry. With local commits waiting, only files they don't touch may change (rebase step 1:
      * their text is still right on the new head), and they move onto the new base; otherwise the
      * pull is refused (`pending-changed`) and nothing is written.
+     *
+     * `rebased` (merge.js rebasePending): {expect: [{id, updated}], commits, dropped} — the local
+     * commits rebased onto the new head. They replace `pending` only if it is still exactly what
+     * was rebased (an edit meanwhile refuses the pull with `pending-changed`, and the sync starts
+     * again); each touched file's working text becomes the last rebased commit's text.
      */
-    applyPull: ({ meta = {}, put = [], del = [], log = null }) =>
+    applyPull: ({ meta = {}, put = [], del = [], log = null, rebased = null }) =>
       tx(["meta", "files", "pending", "log"], "readwrite", (t) => {
         const ps = t.objectStore("pending");
         const all = ps.getAll();
         all.onsuccess = () => {
+          const files = t.objectStore("files");
+          if (rebased) {
+            const now = all.result.map((c) => `${c.id}:${c.updated}`).join(",");
+            const was = rebased.expect.map((c) => `${c.id}:${c.updated}`).join(",");
+            if (now !== was) return t.abortWith(new StoreError("A local commit changed while the pull rebased it.", "pending-changed"));
+            for (const c of all.result) ps.delete(c.id);
+            const work = new Map();
+            for (const c of rebased.commits) {
+              ps.put({ ...c, base: meta.base || c.base });
+              for (const [path, f] of Object.entries(c.files)) work.set(path, f.after);
+            }
+            const byPath = new Map(put.map((f) => [f.path, f]));
+            const gone = new Set(del);
+            // A file the rebase touched: its record from the pull (or as it is), the rebased text as its work.
+            const touched = [...touchedPaths(all.result)];
+            whenAll(t, touched.map((p) => files.get(p)), (recs) => {
+              touched.forEach((path, i) => {
+                if (gone.has(path)) {
+                  // Deleted upstream, but a local commit writes it again ("Keep mine"): keep it here.
+                  if (work.has(path)) {
+                    gone.delete(path);
+                    byPath.set(path, { path, sha: null, text: "", work: work.get(path), readOnly: null });
+                  }
+                  return;
+                }
+                const rec = byPath.get(path) || recs[i];
+                if (!rec) return;
+                const w = work.has(path) ? work.get(path) : rec.text;
+                byPath.set(path, { ...rec, work: w === rec.text ? null : w });
+              });
+              putMeta(t, { ...meta, conflict: undefined });
+              for (const f of byPath.values()) files.put(f);
+              for (const path of gone) files.delete(path);
+              if (log) addLog(t, log);
+            });
+            return;
+          }
           const touched = touchedPaths(all.result);
           const clash = [...put.map((f) => f.path), ...del].find((p) => touched.has(p));
           if (clash) return t.abortWith(new StoreError(`${clash} has local edits; the pull needs a rebase.`, "pending-changed"));
           putMeta(t, meta);
-          const files = t.objectStore("files");
           for (const f of put) files.put(f);
           for (const path of del) files.delete(path);
           if (meta.base) for (const c of all.result) ps.put({ ...c, base: meta.base });
@@ -350,15 +391,52 @@ export function openStore({ indexedDB = globalThis.indexedDB, name = DB_NAME, ti
         };
       }),
 
-    /** Forget the replica (Reset to GitHub), keeping Setup. Refused while commits are pending. */
-    resetReplica: () =>
+    /**
+     * A conflict on `path` resolved, in one transaction (§4, the conflict screen):
+     *   github  every local commit loses its changes to the file (merge.js withoutPath), and the
+     *           file's working text is its base text again; the next pull brings GitHub's;
+     *   mine    the same, then one new local commit on top that writes `mine` over `theirs`.
+     * The path leaves `meta.conflict`. `commits` is withoutPath's result for the current pending.
+     */
+    resolveConflict: ({ path, how, commits, theirs = null, mine = null, message = "", now = Date.now() }) =>
       tx(["meta", "files", "pending", "log"], "readwrite", (t) => {
-        const count = t.objectStore("pending").count();
+        const ps = t.objectStore("pending");
+        const meta = t.objectStore("meta");
+        const fs = t.objectStore("files");
+        whenAll(t, [ps.getAll(), meta.get("seq"), meta.get("conflict"), meta.get("base"), fs.get(path)], ([all, seq, conflict, base, rec]) => {
+          const keep = new Set(commits.map((c) => c.id));
+          for (const c of all) if (!keep.has(c.id)) ps.delete(c.id);
+          for (const c of commits) ps.put(c);
+          let id = null;
+          if (how === "mine") {
+            id = (seq || 0) + 1;
+            meta.put(id, "seq");
+            const part = { edit: `resolve-${id}`, label: "", n: 0, opaque: true, summary: { verb: "Keep", text: "Keep" }, paths: [path] };
+            ps.put({ id, created: now, updated: now, message, base: base || null, ops: [], parts: [part], files: { [path]: { before: theirs, after: mine } }, ctx: {}, sealed: true, attempt: null });
+          }
+          if (rec) fs.put({ ...rec, work: how === "mine" && mine !== rec.text ? mine : null });
+          else if (how === "mine" && mine != null) fs.put({ path, sha: null, text: "", work: mine, readOnly: null });
+          const left = (conflict?.files || []).filter((f) => f.path !== path);
+          if (conflict) meta.put({ ...conflict, files: left }, "conflict");
+          if (conflict && !left.length) meta.delete("conflict");
+          addLog(t, { kind: "resolve", path, how });
+        });
+        return () => undefined;
+      }),
+    /**
+     * Forget the replica (Reset to GitHub), keeping Setup. Refused while commits are pending, unless
+     * `force` (they were pushed to a rescue branch or saved in a zip first): then they go too.
+     */
+    resetReplica: ({ force = false } = {}) =>
+      tx(["meta", "files", "pending", "log"], "readwrite", (t) => {
+        const ps = t.objectStore("pending");
+        const count = ps.count();
         count.onsuccess = () => {
-          if (count.result > 0) return t.abortWith(new StoreError("Local commits are waiting; push them or save them before a reset."));
+          if (count.result > 0 && !force) return t.abortWith(new StoreError("Local commits are waiting; push them or save them before a reset."));
+          ps.clear();
           t.objectStore("files").clear();
           putMeta(t, Object.fromEntries(BASE_KEYS.map((k) => [k, undefined])));
-          addLog(t, { kind: "reset" });
+          addLog(t, { kind: "reset", dropped: count.result });
         };
       }),
 

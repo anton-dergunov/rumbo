@@ -216,3 +216,78 @@ test("a pushed commit leaves pending, its text becomes the base, and the base mo
   assert.equal((await store.readLog()).at(-1).kind, "push");
   await assert.rejects(store.markPushed(id, { sha: "c2", tree: "t2" }), (e) => e.code === "gone");
 });
+
+// ------------------------------------------------------------------------------ rebase and the ways out
+
+test("a pull with rebased commits replaces them and the working text in one transaction", needsIdb, async () => {
+  const store = await withFiles();
+  await store.recordEdit(anEdit("a.org", "1\n", "1\nmine\n"), { now: 1000 });
+  const [c] = await store.pending();
+  const rebased = { ...c, files: { "a.org": { before: "0\n1\n", after: "0\n1\nmine\n" } }, attempt: null };
+  await store.setMeta({ conflict: { head: "x", files: [] } });
+  await store.applyPull({
+    meta: { base: "c2", tree: "t2" },
+    put: [file("a.org", "0\n1\n")],
+    rebased: { expect: [{ id: c.id, updated: c.updated }], commits: [rebased] },
+  });
+  const [p] = await store.pending();
+  assert.equal(p.base, "c2");
+  assert.deepEqual(p.files, rebased.files);
+  const a = (await store.allFiles()).find((f) => f.path === "a.org");
+  assert.equal(a.text, "0\n1\n");
+  assert.equal(a.work, "0\n1\nmine\n");
+  assert.equal((await store.getMeta()).conflict, undefined);
+});
+
+test("a rebased pull is refused if a local commit changed meanwhile (an edit during the pull)", needsIdb, async () => {
+  const store = await withFiles();
+  await store.recordEdit(anEdit("a.org", "1\n", "2\n"), { now: 1000 });
+  const [c] = await store.pending();
+  await store.recordEdit(anEdit("a.org", "2\n", "3\n"), { now: 2000 });
+  await assert.rejects(
+    store.applyPull({ meta: { base: "c2" }, put: [file("a.org", "0\n")], rebased: { expect: [{ id: c.id, updated: c.updated }], commits: [c] } }),
+    (e) => e.code === "pending-changed",
+  );
+  assert.equal((await store.getMeta()).base, "c1");
+  assert.equal(await workOf(store, "a.org"), "3\n");
+});
+
+test("a rebased pull that drops a commit (GitHub made the same change) leaves the file as GitHub's", needsIdb, async () => {
+  const store = await withFiles();
+  await store.recordEdit(anEdit("a.org", "1\n", "2\n"), { now: 1000 });
+  const [c] = await store.pending();
+  await store.applyPull({ meta: { base: "c2" }, put: [file("a.org", "2\n")], rebased: { expect: [{ id: c.id, updated: c.updated }], commits: [] } });
+  assert.deepEqual(await store.pending(), []);
+  const a = (await store.allFiles()).find((f) => f.path === "a.org");
+  assert.deepEqual([a.text, a.work], ["2\n", null]);
+});
+
+test("resolveConflict: github drops the file's changes; mine adds a commit that writes this device's text", needsIdb, async () => {
+  const store = await withFiles();
+  await store.recordEdit(anEdit("a.org", "1\n", "2\n"), { now: 1000 });
+  await store.recordEdit(anEdit("b.org", "x\n", "y\n"), { now: 9000 });
+  await store.setMeta({ conflict: { head: "h", files: [{ path: "a.org", theirs: "T\n" }, { path: "b.org", theirs: "U\n" }] } });
+  const [, cb] = await store.pending();
+  await store.resolveConflict({ path: "a.org", how: "github", commits: [cb] });
+  assert.deepEqual((await store.pending()).map((c) => Object.keys(c.files)), [["b.org"]]);
+  assert.equal(await workOf(store, "a.org"), "1\n");
+  assert.deepEqual((await store.getMeta()).conflict.files.map((f) => f.path), ["b.org"]);
+
+  await store.resolveConflict({ path: "b.org", how: "mine", commits: [], theirs: "U\n", mine: "y\n", message: "Rumbo: Keep this device's b (iPad)", now: 10_000 });
+  const [k] = await store.pending();
+  assert.deepEqual(k.files, { "b.org": { before: "U\n", after: "y\n" } });
+  assert.equal(k.sealed, true, "a resolution takes no more edits");
+  assert.equal(k.message, "Rumbo: Keep this device's b (iPad)");
+  assert.equal(await workOf(store, "b.org"), "y\n");
+  assert.equal((await store.getMeta()).conflict, undefined);
+  assert.deepEqual((await store.readLog()).filter((e) => e.kind === "resolve").map((e) => e.how), ["github", "mine"]);
+});
+
+test("a forced reset forgets the local commits too", needsIdb, async () => {
+  const store = await withFiles();
+  await store.recordEdit(anEdit("a.org", "1\n", "2\n"), { now: 1000 });
+  await store.resetReplica({ force: true });
+  assert.deepEqual(await store.pending(), []);
+  assert.deepEqual(await store.allFiles(), []);
+  assert.equal((await store.readLog()).at(-1).dropped, 1);
+});

@@ -58,8 +58,10 @@ Sibling projects are cited by name (`agentic-org-planner/…`, `calorie-logger/�
 |---|---|---|
 | marked | Markdown for Obsidian notes (via carrel's module) | MIT |
 | DOMPurify | Sanitising rendered notes | Apache 2.0 / MPL 2.0 |
-| node-diff3 | 3-way merge of a file | MIT |
-| fflate | The "download everything" zip | MIT |
+| node-diff3 3.2.1 | 3-way merge of a file, diffs, conflict hunks | MIT |
+| fflate 0.8.3 | The "download everything" zip (only `zipSync`) | MIT |
+
+The vendored files are in `app/vendor/`, with their licences and a README saying where each came from.
 
 - Fonts and Material Symbols are self-hosted in `app/fonts/`, from their npm packages (Fontsource, `material-symbols`), with their licences beside them. The prototype still loads them from Google Fonts.
 
@@ -175,14 +177,22 @@ Rules, most of them lessons from the sibling projects:
 ### When GitHub moved on: rebase
 Emacs or another device pushed while this device had unpushed commits. The ref update fails, or the pull found a newer head. Unpushed commits exist only on this device, so rewriting them is safe, and the history stays linear.
 
-For each pending commit, in order, and for each file it touches (step 1 is built; until steps 2 to 4 are, a file changed on both sides stops the sync with `conflict` and keeps everything local):
+For each pending commit, in order, and for each file it touches (`merge.js`, built in session 5). Each commit rebases onto the text the commits before it left:
 
 1. **The file did not change upstream** since the commit's base → keep the commit's text.
-2. **Replay the commit's ops** on the new upstream text, finding each heading by its title path (`headingKey` / `findHeading` in `org-edit.js`, what `edits.js` does on a 409 today). If every op lands → that is the new text. This is the best result, because it repeats the *intent* ("mark this task done") on the new text.
-3. **3-way merge** with node-diff3 (base = the commit's `before`, ours = its `after`, theirs = the new upstream text). If it merges cleanly → that is the new text.
-4. **Conflict** → stop pushing. Keep everything local, show the conflict (§4), and wait for the owner.
+2. **Replay the commit's ops** on the new upstream text, finding each heading by its title path (`headingKey` / `findHeading` in `org-edit.js`). If every op lands → that is the new text. This is the best result, because it repeats the *intent* ("mark this task done") on the new text.
+   - The spacing context is the saved one on top of the edge memory of the commit's `before` text (`restoreContext`).
+   - Once any file of a commit changed upstream, **all** its files are replayed together. A section moved across files then carries what the Mac changed inside it: the insert takes the lines the replayed extract took.
+   - A commit with an opaque part (an undo, or a "Keep mine") has no ops, so it goes straight to step 3.
+3. **3-way merge** with node-diff3 (base = the commit's `before`, ours = its `after`, theirs = the new upstream text). It counts as clean only if:
+   - diff3 reports no conflict (changes on adjacent lines clash, as in git);
+   - there are no more marker lines than either side had;
+   - every heading line is from one of the two sides, and the text parses.
+4. **Conflict**: a clash, or a file deleted upstream or now read-only there (CR, not UTF-8). Stop pushing, keep everything local, and record the conflict in `meta.conflict` (base, mine and theirs per file, so the screen survives a restart). Show it (§4) and wait for the owner. Every file in conflict is listed at once.
 
-The result of 2 or 3 also has to pass the edit invariants (§5) before it replaces the pending commit. **No text with conflict markers is ever committed**: Emacs's `git add -A` would commit them as ordinary text (`agentic-org-planner/lisp/ps-git-sync.el:624-660`).
+The rebased commits and the pulled files are written in **one transaction** (`applyPull` with `rebased`), and only if `pending` is still what was rebased. An edit made during the pull refuses it, and the sync starts again. An edit still queued in the page when the pull lands is refused by the store as stale; `edits.js` then runs its ops again on the stored text. A rebased commit loses its `attempt`. A commit whose changes upstream already made is dropped.
+
+The result of 2 also passes the edit invariants (§5), because `applyOp` checks every op. **No text with conflict markers is ever committed**: Emacs's `git add -A` would commit them as ordinary text (`agentic-org-planner/lisp/ps-git-sync.el:624-660`).
 
 ### The sync engine
 - One sync at a time. A trigger during a sync sets an `again` flag and gets one more pass (Acervo `web/src/sync.ts`, `syncNow`).
@@ -253,10 +263,12 @@ The owner wants to see where things stand in git terms, and to be able to fix th
   It is shared through the Web Share sheet (Mail, Files, AirDrop), or downloaded where sharing is not available.
 - **Sync log**: the last ~100 events (pulls, pushes, rebases, errors) with times.
 
-**The conflict screen** shows, per file, the clash in context, mine against GitHub's, and offers:
-- **Keep GitHub's.** Mine is pushed to a rescue branch first, so nothing is lost.
-- **Keep mine.** A new commit on top of GitHub's head, with my text for that file.
+**The conflict screen**, at the top of the Sync page, shows per file the clashes in context (this device's lines against GitHub's, two lines around each) and offers (`rescue.js`):
+- **Keep GitHub's.** Mine is pushed to a rescue branch first, so nothing is lost. Then every local commit loses its changes to that file. A commit left with nothing is dropped. A commit that loses half of a move across files becomes opaque (no ops to replay).
+- **Keep mine.** The local commits lose their changes to the file, and one new local commit on top writes my text over GitHub's (`Rumbo: Keep this device's Inbox (iPad)`). GitHub's text stays in the history. For a file deleted upstream, it writes the file again.
 - **Rescue and stop.** Push mine to a rescue branch, take GitHub's, and finish on the Mac.
+
+The rescue branch holds one GitHub commit per local commit, chained on their real parent. A name already taken that minute gets `-2`, `-3` and so on. The zip's patches are in `git am` format; the zip leaves out the token. "Reset to GitHub" is always offered; with commits pending, it pushes them to a rescue branch first.
 
 ## 5. Editing without disturbing the file
 
@@ -411,9 +423,10 @@ One test per edge case in §3, plus:
   - both fail, giving a conflict; then each of the three ways out.
 - **Rescue branch, reset, zip:** the contents are exactly the pending commits and the working files.
 - **Interrupted at every step:** a sync stopped after each request, the app restarted from IndexedDB, and the sync completed. No edit is lost or doubled.
-- **Seeded random interleavings** of the actors' edits and syncs, checking after each run:
-  - every edit is either in `main` or still pending;
+- **Seeded random interleavings** of the actors' edits and syncs (`tests/interleavings.test.mjs`: 40 seeds by default, `RUMBO_SEEDS` for more; injected failures; a random way out of each conflict), checking after each run:
+  - every unique title still meant to exist is on `main`, or, after a way out dropped it, on a rescue branch or in main's history;
   - nothing pushed contains conflict markers;
+  - each local commit reached `main` at most once, and history is a line;
   - all replicas converge to `main`.
 - **IndexedDB:** the store runs on `fake-indexeddb` in tests, and a hanging request is simulated to test the 2 s guard.
 
@@ -431,9 +444,10 @@ One test per edge case in §3, plus:
   It writes nothing and its output is not committed.
 
 ### End to end, opt-in
-`tools/e2e-github.mjs`, given a throwaway private repo and a token for it:
+`tools/e2e-github.mjs`, given a throwaway private repo and a token for it (`RUMBO_E2E_REPO`, `RUMBO_E2E_TOKEN`):
 - runs the real API;
-- runs real `git` beside it with the same commit, pull and push commands as Emacs's sync, to check that the two work together.
+- runs real `git` beside it with the same commit, pull and push commands as Emacs's sync, to check that the two work together: a push pulled byte for byte, a pull, a replay that git fast-forwards, a rescue branch.
+- It refuses a repo with commits that lacks the `.rumbo-e2e` file it leaves behind, so it can't be pointed at the vault.
 It is never run in CI.
 
 ### UI and build
@@ -457,6 +471,7 @@ It is never run in CI.
 | `remote-github.js` | new | the `Remote` interface on GitHub |
 | `sync.js` | new | pull, push, rebase, the engine and its triggers |
 | `merge.js` | new | replay, then 3-way merge |
+| `rescue.js` | new | the rescue branch, the zip, the three answers to a conflict |
 | `notes.js` | new | the Obsidian index, fetching and rendering |
 | `sync-ui.js` | new | the Sync page and the conflict screen |
 | `sw.js` | new | the service worker |

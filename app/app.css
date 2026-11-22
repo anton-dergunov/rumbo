@@ -2202,10 +2202,6 @@ hr {
 .toast .t-text {
   padding: 6px 0;
 }
-.t-sub {
-  opacity: 0.6;
-  font-weight: 400;
-}
 .t-act {
   flex: none;
   min-height: 38px;
@@ -2223,33 +2219,13 @@ hr {
   color: var(--toast-ink);
   opacity: 0.6;
 }
-.toast.t-error,
-.toast.t-conflict {
+.toast.t-error {
   background: color-mix(in srgb, var(--prio-a) 82%, black);
   color: #fff;
 }
 .toast.t-error .t-act,
-.toast.t-conflict .t-act,
-.toast.t-error .t-x,
-.toast.t-conflict .t-x {
+.toast.t-error .t-x {
   color: #fff;
-}
-.t-spin {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.t-sub {
-  white-space: nowrap;
 }
 
 /* ============================================================ the app beyond the prototype */
@@ -2357,6 +2333,96 @@ a.set-row {
 .size-phone .sy-row {
   grid-template-columns: 1fr;
   gap: 2px;
+}
+.sy-h-alert {
+  color: var(--prio-a);
+}
+.sy-commits details > summary {
+  cursor: pointer;
+  list-style-position: outside;
+}
+.sy-diff,
+.cf-lines {
+  margin: 8px 0 4px;
+  font: 12.5px/1.45 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sy-diff {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--sunk);
+}
+.dl {
+  display: block;
+}
+.dl-add {
+  background: color-mix(in srgb, var(--st-next) 16%, transparent);
+}
+.dl-del {
+  background: color-mix(in srgb, var(--prio-a) 14%, transparent);
+}
+.dl-hunk,
+.dl-head {
+  color: var(--ink-3);
+}
+
+/* The conflict screen, at the top of the Sync page */
+.cf-help {
+  margin: 0 0 6px;
+  color: var(--ink-2);
+}
+.sy-conflict {
+  margin: 12px 0 18px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--prio-a) 40%, var(--rule));
+  border-radius: 12px;
+  background: var(--surface);
+}
+.cf-file {
+  margin: 0;
+  font: 600 16px/1.3 var(--font-ui);
+  overflow-wrap: anywhere;
+}
+.cf-file .muted {
+  font-weight: 400;
+  font-size: 13px;
+}
+.cf-why {
+  margin: 4px 0 8px;
+  color: var(--ink-2);
+}
+.cf-clash {
+  margin: 10px 0;
+}
+.cf-lines {
+  margin: 0;
+}
+.cf-line {
+  display: block;
+}
+.cf-ctx {
+  color: var(--ink-3);
+}
+.cf-side {
+  margin: 4px 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--rule);
+  border-radius: 0 8px 8px 0;
+  background: var(--sunk);
+}
+.cf-mine {
+  border-left-color: var(--accent);
+}
+.cf-theirs {
+  border-left-color: var(--ink-3);
+}
+.cf-k {
+  display: block;
+  font: 600 11px/1.4 var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
 /* Setup */

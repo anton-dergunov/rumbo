@@ -12,6 +12,7 @@ import { headingKey, findHeading } from "./org-edit.js";
 import { openStore } from "./store.js";
 import { createRemote } from "./remote-github.js";
 import { pull, syncOnce, createEngine, attachTriggers } from "./sync.js";
+import { pushRescue, buildZip, shareOrDownload, keepTheirs, keepMine, rescueAndStop } from "./rescue.js";
 import { renderSetup } from "./setup.js";
 import { startPwa, onStatus as onPwaStatus, applyUpdate } from "./pwa.js";
 
@@ -330,17 +331,51 @@ actions.setPref = (key, value) => {
   store.setSetting("prefs", { theme: state.theme, nav: state.nav }).catch(() => {});
 };
 actions.syncNow = () => engine?.sync("manual");
-actions.resetReplica = async () => {
-  try {
-    await store.resetReplica();
-  } catch (e) {
-    alert(e.message);
-    return;
-  }
-  runtime.meta = await store.getMeta();
-  model = buildModel([], { name: repoName(runtime.meta) });
+/**
+ * A way out (§4): one at a time, never during a sync; then the page shows what the store holds and
+ * the sync runs again. `fn` returns a line for the Sync page, or null.
+ */
+async function wayOut(label, fn) {
+  if (runtime.busy) return;
+  runtime.busy = label;
+  runtime.syncNote = null;
   render();
+  try {
+    await engine?.idle();
+    runtime.syncNote = (await fn()) || null;
+  } catch (e) {
+    alert(`${label}: ${e.message}${e.detail ? ` (${e.detail})` : ""}`);
+  } finally {
+    runtime.busy = null;
+  }
+  runtime.meta = await store.getMeta().catch(() => runtime.meta);
+  runtime.pending = await store.pending().catch(() => runtime.pending);
+  await reloadModel(model ? model.files.map((f) => f.path) : []);
+  loadSyncPage();
   engine?.sync("manual");
+}
+
+const rescued = (r) => `Your local commits are on the branch ${r.branch} on GitHub.`;
+const askRescue = (n) => confirm(`${n} local commit${n === 1 ? " is" : "s are"} not on GitHub yet. Push ${n === 1 ? "it" : "them"} to a rescue branch first, then go on?`);
+
+actions.pushRescue = () => wayOut("Pushing to a rescue branch", async () => rescued(await pushRescue({ remote, store })));
+actions.downloadAll = () =>
+  wayOut("Making the zip", async () => {
+    const zip = await buildZip({ store });
+    const how = await shareOrDownload(zip);
+    return how === "cancelled" ? null : `${zip.name} ${how === "shared" ? "shared" : "downloaded"}.`;
+  });
+actions.keepTheirs = (path) => wayOut("Keeping GitHub's text", async () => rescued(await keepTheirs({ remote, store, path })));
+actions.keepMine = (path) => wayOut("Keeping this device's text", async () => (await keepMine({ store, path }), null));
+actions.rescueAndStop = () => confirm("Push all local commits to a rescue branch, then take GitHub's branch as it is on this device?") && wayOut("Rescuing", async () => rescued(await rescueAndStop({ remote, store })));
+actions.resetReplica = () => {
+  const n = runtime.pending.length;
+  if (n) {
+    if (!askRescue(n)) return;
+    return wayOut("Resetting to GitHub", async () => rescued(await rescueAndStop({ remote, store })));
+  }
+  if (!confirm("Forget this device's copy and download GitHub's branch again? Nothing here is unsaved.")) return;
+  return wayOut("Resetting to GitHub", async () => (await store.resetReplica(), "This device's copy was downloaded again."));
 };
 actions.openSetup = () => showSetup(runtime.meta);
 // An update never lands during a sync (§2).

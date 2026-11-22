@@ -1,13 +1,14 @@
 // Sync with the vault's repo on GitHub (docs/plans/real-app.md §3): the pull, the push of local
-// commits, and the engine that runs them. Of the rebase, only its first step is here: GitHub moved
-// on but changed none of the files the local commits touch, so they stay as they are on the new
-// head. A file changed on both sides stops with `conflict` (replay and the 3-way merge are plan
-// step 4b).
+// commits, and the engine that runs them. When GitHub moved on and changed a file the local commits
+// touch, the pull rebases them (merge.js: keep, replay, 3-way merge) and writes the result in the
+// same transaction as the pull. What doesn't merge stops with `conflict`, kept in `meta.conflict`
+// for the conflict screen; nothing local is changed.
 
 import { RemoteError } from "./remote-github.js";
 import { StoreError } from "./store.js";
 import { blobSha, bytesToText } from "./gitobj.js";
 import { isWanted } from "./vault-files.js";
+import { rebasePending } from "./merge.js";
 
 const BLOB_PARALLEL = 6;
 
@@ -22,7 +23,7 @@ export class SyncError extends Error {
 }
 
 const DIVERGED = "GitHub's branch was rewritten (a force-push), so it no longer continues from this device's copy. Nothing was changed here.";
-const CONFLICT = "A file edited here was also changed on GitHub. Merging the two comes in a later version of Rumbo; your edits are kept on this device.";
+const CONFLICT = "A file edited here was also changed on GitHub, and the two changes overlap. Your edits are kept on this device: choose what to keep on the Sync page.";
 /** How many times one sync starts again after losing a race (a ref update refused, an edit meanwhile). */
 const RETRIES = 3;
 
@@ -95,10 +96,8 @@ async function pullTo({ remote, store, meta, head, pending, onProgress = () => {
   const wantedPaths = new Set(wanted.map((e) => e.path));
   const del = [...have.keys()].filter((p) => !wantedPaths.has(p));
 
-  // Rebase, step 1 only: a file touched here must be as it was upstream.
   const touched = new Set(pending.flatMap((c) => Object.keys(c.files)));
   const both = [...changed.map((e) => e.path), ...del].filter((p) => touched.has(p));
-  if (both.length) throw new SyncError("conflict", CONFLICT, both.join(", "));
 
   let done = 0;
   onProgress({ done, total: changed.length });
@@ -109,6 +108,27 @@ async function pullTo({ remote, store, meta, head, pending, onProgress = () => {
     onProgress({ done: ++done, total: changed.length });
     return fileRecord(e.path, e.sha, bytes);
   });
+
+  // A file changed upstream that a local commit touches: rebase the local commits onto the new head.
+  let rebased = null;
+  let stats = null;
+  if (both.length) {
+    const fresh = new Map(put.map((f) => [f.path, f]));
+    const upstream = (path) => {
+      const f = fresh.get(path) || (wantedPaths.has(path) ? have.get(path) : null);
+      return f ? { text: f.text, readOnly: f.readOnly } : undefined;
+    };
+    const r = rebasePending(pending, upstream, { onto: head.sha });
+    if (!r.ok) {
+      const paths = r.conflicts.map((x) => x.path);
+      await store.setMeta({ conflict: { head: head.sha, at: now, files: r.conflicts }, lastCheck: now });
+      throw new SyncError("conflict", CONFLICT, paths.join(", "));
+    }
+    rebased = { expect: pending.map((c) => ({ id: c.id, updated: c.updated })), commits: r.commits };
+    stats = { replayed: 0, merged: 0 };
+    for (const h of Object.values(r.how)) for (const v of Object.values(h)) if (v in stats) stats[v] += 1;
+  }
+
   const c = await remote.commit(head.sha);
 
   await store.applyPull({
@@ -119,12 +139,14 @@ async function pullTo({ remote, store, meta, head, pending, onProgress = () => {
       baseCommit: { sha: c.sha, message: c.message, author: c.author, date: c.date },
       lastCheck: now,
       lastError: null,
+      conflict: undefined,
     },
     put,
     del,
-    log: { kind: "pull", from: meta.base || null, to: head.sha, files: put.length, removed: del.length, kept: pending.length },
+    rebased,
+    log: { kind: "pull", from: meta.base || null, to: head.sha, files: put.length, removed: del.length, kept: pending.length, ...(stats ? { rebased: rebased.commits.length, ...stats } : {}) },
   });
-  return { changed: true, paths: [...put.map((f) => f.path), ...del] };
+  return { changed: true, paths: [...new Set([...put.map((f) => f.path), ...del, ...(rebased ? touched : [])])] };
 }
 
 /** Blob SHAs of a local commit's texts, as a push would have made them. */

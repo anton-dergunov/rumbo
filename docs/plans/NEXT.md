@@ -17,12 +17,42 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 | 3 | 3 | Blank lines: the gap model in `org-edit.js`, `applyOp` and serialisable ops, invariants, `tools/spacing-report.mjs`, `tools/vault-check.mjs`, property tests. The owner then reviews the spacing report. | §5, §8 (Blank lines) | **done** |
 | — | owner | Review the spacing report (below) | — | **done** |
 | 4 | 4a | `tests/fake-github.mjs` (its write side; session 2 made the read side) and the scenario harness (the Emacs actor, a second replica), then local commits (folding edits 3 s apart), push, the lost-response and interrupted-sync cases | §3 (Commit and push, engine, edge cases), §8 (fake, scenarios) | **done** |
-| 5 | 4b | Rebase (replay, then node-diff3), the conflict screen, rescue branch, reset, the zip, seeded random interleavings, `tools/e2e-github.mjs` | §3 (rebase), §4, §8 | next |
-| 6 | 5 | Obsidian notes: `notes.js`, carrel's Markdown module, wiki links, embeds, footnotes | §6 | |
-| 7 | 6 | Task icons (a session in `agentic-org-planner`), then hardening on the devices | §7, §9 (iOS details) | |
+| 5 | 4b | Rebase (replay, then node-diff3), the conflict screen, rescue branch, reset, the zip, seeded random interleavings, `tools/e2e-github.mjs` | §3 (rebase), §4, §8 | **done** |
+| — | owner | Run `tools/e2e-github.mjs` on a throwaway repo (below) | — | |
+| 6 | 5 | Obsidian notes: `notes.js`, carrel's Markdown module, wiki links, embeds, footnotes | §6 | next |
+| 7 | 6 | Task icons (a session in `agentic-org-planner`), the on-device fallback model (below), then hardening on the devices | §7, §9 (iOS details) | |
 
 ## Later (after the sessions above)
 - **Sync details from Settings** (the owner, 2026-11-22): a way from Settings to fuller sync statistics. The Sync page is reachable from Settings already; this would add more (merge commits counted, rate-limit use, pull timings, history per file).
+
+### Session 7 in more detail: the fallback icon model (the owner, 2026-11-22)
+Emacs's icons (`.ps/task-icons.json`, §7) stay the source. A task with no entry yet gets a guess from a small model on the device. This happens, for example, after a task is added or its state changes on the phone, before Emacs has seen it. When Emacs's icon arrives with a pull, it replaces the guess. The guess is never written to the vault. Responsiveness matters more than quality here.
+
+- **Model: `F1@all-kd-final`** from task-concept-retrieval (`~/projects/research/task-concept-retrieval`). It is the best of its smallest models: multilingual-e5-small (118M), fine-tuned and distilled from the big model that Emacs runs.
+  - Silver nDCG@5 / hit@1 0.534 / 0.659 with the parent heading, against 0.567 / 0.714 for the big model.
+  - Details are in that repo's `docs/deployment.md` "Deployed (2026-11-22)".
+- **Already exported, in that repo's `.cache/`:**
+  - the encoders in `onnx/F1-all-kd-final/`: `model_fp16.onnx` (235 MB, the same picks as the trained model) and `model_int8.onnx` (118 MB; it changes ~30% of top-1s, silver ~0.03 lower), with `tokenizer.json`;
+  - the bundles in `bundles/F1-all-kd-final-{fp16,int8}/`: `names.txt` (2,862 icons), `dense.npy` (icon vectors, fp16 2,862 × 384, 2.2 MB) and `manifest.json`;
+  - the same files on Hugging Face, once the owner uploads them: `AntonDergunov/task-icon-encoder-e5-small-interim`;
+  - to remake: `scripts/export_bundle.py --method F1 --run all-kd-final --precision fp16|int8`.
+- **What the device has to do** (it mirrors `scripts/org_task_icon_matcher.py` in `agentic-org-planner`):
+  - query text: the title made plain (`org-plain` there), prefixed with the nearest parent heading as `"<parent>: <title>"`, then `query: `;
+  - encode one text at a time, with no padding, truncated to 64 tokens;
+  - mean-pool `last_hidden_state`, L2-normalize, multiply by `dense.npy`, take the top-1;
+  - show it when `z = (max − mean) / std` of the scores is at least the manifest's `fusion.threshold` (≈ 3.0, which shows ~100% of tasks).
+- **Hosting (the owner's choice): split chunks, self-hosted.** GitHub (and so Pages) refuses files over 100 MiB.
+  - Ship the ONNX as parts under 100 MiB (`model.onnx.part0`, `part1`, …), with a small list of sizes and sha256s.
+  - Fetch them from `'self'`, so the CSP stays as it is.
+  - Join them into one `Uint8Array`, check the whole file's sha256, and keep it in Cache Storage.
+  - Download only when a visible task lacks an icon, never on first paint, and not into the service worker's precache.
+  - Hugging Face is a copy for reference only; the app does not fetch from it.
+- **Open for the session:**
+  - The runtime: ONNX Runtime Web (WASM) or transformers.js in Safari.
+  - Whether fp16 runs well there, or int8 is the one to ship. int8 is half the download, and its quality loss is acceptable for a fallback.
+  - The tokenizer in JS (XLM-R SentencePiece unigram).
+  - Memory on the iPad mini.
+  - Later, vocabulary trimming in task-concept-retrieval (118M → ~35M with EN/ES/RU tokens only) would cut the download about three times.
 
 ### Session 2 in more detail (done)
 - `app/` becomes the real app: copy the prototype modules (`org.js`, `inline.js`, `workspace.js`, `org-edit.js`, `edits.js`, `data.js`, the UI modules, the CSS), drop the harness, keep `prototype/` as it is.
@@ -36,6 +66,24 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 - Check the prototype's inline styles against the CSP (`style-src 'self'` forbids `style="…"` attributes in HTML; setting `el.style` from script is fine).
 - The Android report backs the plan's sizing: a first clone of the whole vault is about 1 MB in about 4 s, and polling an unchanged head is a free 304. The owner's token has no expiry; the 2060-11-01 in the Android report stood for that, before the check page had a "no expiry" box.
 - Don't trust `navigator.onLine`: on Android it said "online" with every radio off (§3, the sync engine). The Sync page's "offline" comes from the failure class of the last request.
+
+## For the owner: the end-to-end run (after session 5)
+
+`tools/e2e-github.mjs` runs Rumbo's sync code against the real GitHub, with real `git` running the Emacs sync's commands beside it. It has not been run yet: it needs a repo of its own.
+1. Make an **empty private** repo on GitHub, for example `rumbo-e2e`. Don't add a README; it must be empty.
+2. Make a fine-grained token for that repo only, with *Contents: read and write*, and a short expiry.
+3. In this folder (after `npm install`):
+   ```sh
+   RUMBO_E2E_REPO=<owner>/rumbo-e2e RUMBO_E2E_TOKEN=<token> node tools/e2e-github.mjs
+   ```
+   It prints PASS or FAIL for each step:
+   - the clone;
+   - a Rumbo push that `git pull` gets byte for byte;
+   - an Emacs push that Rumbo pulls;
+   - both editing one file (Rumbo replays, git fast-forwards);
+   - a rescue branch (made, checked, deleted);
+   - the final agreement of every file.
+   It refuses any repo that has commits but no `.rumbo-e2e` (the file it leaves there), so it can't touch the vault. Each run adds commits to the throwaway repo; delete the repo when done. Paste the output into the next session if anything fails.
 
 ## For the owner: the spacing review (after session 3)
 
@@ -70,6 +118,64 @@ It shows the blank-line habit of each cell, counted from the vault, then the hea
    ```
 
 ## Hand-off
+
+### Session 5 (2026-11-22)
+**Done**
+- **Vendored** node-diff3 3.2.1 and fflate 0.8.3 into `app/vendor/`, with their licences and a README. Not node-diff3 4.0.0: it was nine days old.
+- **`app/merge.js`, the rebase** (`rebasePending`). For each pending commit, in order, against the text the commits before it left:
+  - keep;
+  - replay the ops (all of the commit's files together; an insert after an extract takes the newly extracted lines);
+  - a 3-way merge per file (clean only with no new markers and no invented heading lines);
+  - else a conflict, listing every file.
+  Also `withoutPath`, `clashes`, and `unifiedDiff` (git-style patches).
+- **`sync.js` `pullTo`** rebases instead of stopping. A conflict is saved in `meta.conflict` (base, mine, theirs per file) and stops with `conflict`.
+- **`store.js`:**
+  - `applyPull({rebased})` writes the rebased commits, the pulled files and the working text in one transaction, refused (`pending-changed`, so the sync retries) if `pending` changed meanwhile;
+  - `resolveConflict`, `resetReplica({force})`;
+  - `conflict` is a base key, so a reset forgets it.
+- **`edits.js`:** an edit the store refuses as stale (a pull rebased the file under the queue) runs its ops again on the stored text, then the page is rebuilt.
+- **`app/rescue.js`:**
+  - `pushRescue` → `rumbo/rescue-<date>-<hhmm>` (`-2`… if taken);
+  - `buildZip` (files, `git am` patches, `state.json` without the token) and `shareOrDownload`;
+  - `keepTheirs` (rescue first), `keepMine` (an opaque commit `Rumbo: Keep this device's <file> (<device>)`), `rescueAndStop`.
+- **Sync page:**
+  - the conflict screen at the top (the clashes with context; Keep GitHub's / Keep mine / Rescue and stop);
+  - each local commit's diff behind a disclosure that stays open across redraws;
+  - "Ways out": Push my changes to a branch, Download everything, Reset to GitHub (always offered; with commits pending, it rescues first);
+  - log lines for rebase, rescue, resolve.
+  - The unused toast kinds (`saved`, `saving`, `memory`) and their CSS are gone.
+- **`tools/e2e-github.mjs`**, opt-in. Not run yet; see "For the owner" above.
+- **Tests:** 182 pass with `npm install`.
+  - New suites: `merge` (15), `edits-replay`, and `interleavings` (40 seeds by default, about 1.5 s; 300 seeds pass, and 60 of them reach a conflict and a way out).
+  - The scenarios gain: replay after Emacs, a refused push that rebases, merge only, a conflict with each way out, a file deleted upstream, the zip's contents, reset after a rescue, and the kill at every request of a sync that rebases.
+  - Store tests for the rebased pull (with the race), `resolveConflict` and the forced reset.
+- **Checked in WebKit,** served under `/rumbo/` against the fake (a scratch Node server with CORS, routed from `api.github.com`):
+  - Setup;
+  - an edit plus an Emacs push to the same file replayed with no stop;
+  - a rename on both sides showed the conflict screen, and Keep mine landed;
+  - a second clash with Keep GitHub's made a rescue branch holding my text;
+  - offline, a local commit's diff;
+  - the zip (WebKit took the share path).
+  Screenshots at the three sizes. No console errors besides Playwright's own screenshot stylesheet.
+- `vault-check` on the real vault: no failures (82 s).
+
+**Findings and decisions**
+- **Changes on adjacent lines clash in diff3**, as in git. So "both sides edited the next line" is a conflict, not a merge. Replay is what makes most same-file edits land.
+- **Keep GitHub's drops a file from every local commit.** When that leaves a move across files with only one half, the commit keeps its texts but loses its ops (opaque), so it isn't replayed from a broken pair. The rescue branch, made first, holds the whole commit.
+- **Keep mine is a sealed, opaque commit** on top, with `before` = GitHub's text. The next rebase keeps it if GitHub hasn't moved, else merges it. For a file deleted upstream it writes the file again, and the rebased pull keeps the file on the device.
+- **A rebased commit whose changes upstream already made is dropped.**
+- **Not tested:** the zip's download fallback in WebKit (headless WebKit says it can share files). The share path was exercised.
+- **Testing notes:**
+  - The browser run edited through `import('./edits.js')` in `page.evaluate`: it is the same module instance as the app's. The UI clicking was checked in sessions 3 and 4.
+  - Playwright routes forward to the scratch server, dropping `If-None-Match` (no 304 through a route).
+
+**Left for later sessions**
+- Session 6: reuse `app/vendor/` for marked and DOMPurify, pinned to versions at least two weeks old, each with its licence and a README row. Setup already stores the Obsidian repo and vault name (`settings` → `obsidian`).
+- Session 7 (hardening on the devices):
+  - try a conflict and each way out on the iPad;
+  - check that the share sheet offers Files and AirDrop for the zip;
+  - check that the Sync page's diffs soft-wrap on the phone with real notes.
+- "Keep GitHub's" and "Rescue and stop" make one rescue branch each time; several clashing files mean several branches. Fine for now; one branch per conflict could come later.
 
 ### Session 4 (2026-11-22)
 **Done**

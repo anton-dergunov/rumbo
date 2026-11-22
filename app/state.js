@@ -32,6 +32,8 @@ export const runtime = {
   sync: { status: "synced", lastError: null }, // from the sync engine
   pending: [], // the local commits not yet pushed (store.js)
   updateWaiting: false,
+  busy: null, // the way out running now (Sync page), e.g. "Pushing to a rescue branch"
+  syncNote: null, // what the last way out did, shown on the Sync page
 };
 
 const URL_KEYS = ["fold", "file", "view", "focus", "group", "editing"];

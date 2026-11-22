@@ -122,6 +122,10 @@ export function createFakeGitHub({ owner = "me", repo = "vault", branch = "main"
     commits,
     head: () => refs.get(branch) || null,
     ref: (name) => refs.get(name) || null,
+    /** Every branch as [name, sha]. */
+    branches: () => [...refs],
+    /** Forget the injected failures not used yet. */
+    clearFailures: () => void (failures.length = 0),
     /** The files of a commit as text: { path: text }. */
     filesAt: (sha) => Object.fromEntries(Object.entries(filesAt(sha)).map(([p, b]) => [p, new TextDecoder().decode(b)])),
     /** The first-parent history of the branch, newest first: [{ sha, message, author, parents }]. */

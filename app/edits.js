@@ -5,13 +5,18 @@
 // writes the file's new working text and the local commit holding it in one transaction (edits
 // under 3 s apart fold into one commit). The sync engine pushes it (sync.js). If the store refuses
 // (the file changed meanwhile, or IndexedDB didn't answer), the owner is told and the page is
-// reloaded from what the store really holds. Undo goes the same way (store.undoEdit): before a
-// push it takes the edit off its commit, after a push it is a new commit with the old text.
+// reloaded from what the store really holds. A pull that rebased the file under a queued edit
+// makes the store refuse it as stale: the edit's ops then run again on the stored text (as a
+// rebase replays them), and only if that fails is it refused. Undo goes the same way
+// (store.undoEdit): before a push it takes the edit off its commit, after a push it is a new
+// commit with the old text.
 
 import { joinLines, headingKey, findHeading } from "./org-edit.js";
 import { applyOps, OpError } from "./ops.js";
 import { edgeMemory, mergeMemory } from "./spacing.js";
 import { editRecord, undoSummary } from "./commits.js";
+import { replayCommit } from "./merge.js";
+import { StoreError } from "./store.js";
 import { rebuildFile } from "./data.js";
 import { state, overridesFor } from "./state.js";
 
@@ -135,7 +140,7 @@ export function edit(path, label, build, { quiet = false } = {}) {
   const idMap = remap(path, oldDoc, file.doc, result.map);
   const rec = editRecord({ id: nextId(), label, ops, files: [{ path, before, after, doc: oldDoc, ctx }] });
   pushUndo({ id: rec.id, label, summary: rec.summary, files: rec.files });
-  persist(() => store.recordEdit(rec));
+  persist(() => recordOrReplay(rec));
   if (!quiet) notify({ text: label, kind: "done", action: { label: "Undo", run: undo } });
   redraw(idMap);
   return headingAt(file, result.at);
@@ -179,7 +184,7 @@ export function editTwo(srcPath, dstPath, label, take, put) {
   }
   const rec = editRecord({ id: nextId(), label, ops: [opA, opB], files });
   pushUndo({ id: rec.id, label, summary: rec.summary, files: rec.files });
-  persist(() => store.recordEdit(rec));
+  persist(() => recordOrReplay(rec));
   notify({ text: label, kind: "done", action: { label: "Undo", run: undo } });
   redraw(idMap);
   return headingAt(dst, b.at);
@@ -222,6 +227,32 @@ function pushUndo(entry) {
 function cantEdit(file) {
   if (!model.writable || !store) return "This copy of the vault can't be edited yet.";
   return readOnlyReason(file);
+}
+
+/**
+ * Store an edit. If its files changed in the store since the page read them (a pull rebased them),
+ * run its ops again on the stored text and store that; the page is then rebuilt from the store.
+ */
+async function recordOrReplay(rec) {
+  try {
+    return await store.recordEdit(rec);
+  } catch (err) {
+    if (!(err instanceof StoreError && err.code === "stale") || !rec.ops?.length) throw err;
+    const stored = new Map((await store.allFiles()).map((f) => [f.path, f]));
+    const texts = Object.fromEntries(rec.files.map((f) => [f.path, stored.get(f.path) ? (stored.get(f.path).work ?? stored.get(f.path).text) : undefined]));
+    let r;
+    try {
+      r = replayCommit({ files: Object.fromEntries(rec.files.map((f) => [f.path, f])), ops: rec.ops, ctx: rec.ctx }, texts);
+    } catch {
+      throw err;
+    }
+    const files = rec.files.map((f) => ({ path: f.path, before: texts[f.path], after: r.files[f.path] }));
+    const again = { ...rec, ops: r.ops, files };
+    await store.recordEdit(again);
+    const entry = undoStack.find((e) => e.id === rec.id);
+    if (entry) entry.files = files;
+    reload();
+  }
 }
 
 // One write at a time, in the order the edits were made: each one's `before` is the text the one

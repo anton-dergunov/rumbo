@@ -160,29 +160,15 @@ export const panelOpen = () => stack.length > 0;
 let toastEl = null;
 let toastTimer = 0;
 let toastHasAction = false;
-let toastKind = "";
 
 function showNotice(n) {
   if (!layer) return;
-  // A "saved" or "page only" note joins a toast that is still offering Undo instead of replacing it.
-  if ((n.kind === "saved" || n.kind === "memory") && toastEl && (toastHasAction || toastKind === "conflict")) {
-    toastEl.querySelector(".t-sub")?.remove();
-    toastEl.querySelector(".t-text").append(h("span", { class: "t-sub" }, n.kind === "saved" ? " · saved" : " · this page only"));
-    if (n.kind === "memory") toastEl.title = n.text;
-    return;
-  }
-  if (n.kind === "saved" && toastEl && !toastHasAction) {
-    toastEl.remove();
-    toastEl = null;
-  }
   clearTimeout(toastTimer);
   toastEl?.remove();
   toastHasAction = !!n.action;
-  toastKind = n.kind;
   toastEl = h(
     "div",
     { class: `toast t-${n.kind}`, role: "status", "aria-live": "polite" },
-    n.kind === "saving" ? h("span", { class: "t-spin" }) : null,
     h("span", { class: "t-text" }, n.text),
     n.action
       ? h(
@@ -197,10 +183,10 @@ function showNotice(n) {
           n.action.label,
         )
       : null,
-    n.sticky && n.kind !== "saving" ? h("button", { class: "t-x", "aria-label": "Dismiss", onclick: hideToast }, icon("close")) : null,
+    n.sticky ? h("button", { class: "t-x", "aria-label": "Dismiss", onclick: hideToast }, icon("close")) : null,
   );
   layer.append(toastEl);
-  if (!n.sticky) toastTimer = setTimeout(hideToast, n.action ? 6000 : n.kind === "saved" ? 1500 : 4000);
+  if (!n.sticky) toastTimer = setTimeout(hideToast, n.action ? 6000 : 4000);
 }
 
 function hideToast() {
