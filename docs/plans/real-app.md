@@ -296,14 +296,15 @@ Rumbo adopts the Emacs model instead (`agentic-org-planner/lisp/ps-blank-lines-t
 
 ### The style rule has one source: the vault
 - The cells are counted from the vault's own files every time it loads, using the cell definitions of `ps/blank-lines-rule-cell` (`l1`, `l2-after-preamble`, `l2-parent-…`, `l2-from-deeper-…`, `l2-sibling-…`, each `-prose` or `-bare`), with two changes:
-  - Level 3 is counted apart from 4 and deeper, so a different level-3 habit is learnt rather than assumed.
-  - At levels 2 and 3, a section (a heading that is not a task) is counted apart from a task: `l2-sibling-section` and `l3-section`. A level-2 section after its sibling has a blank line before it 13 times in 17, and a level-2 task after a task once in 1,117. So `l2-sibling-prose` and `-bare` count tasks only. At level 3 a section has one 11 times in 31, so its majority is none. Only boundary gaps are counted, never leads. A cell needs at least 5 examples to be used; a tie goes to the built-in default.
+  - Level 3 has the same cells as level 2 (`l3-parent-prose`, `l3-from-deeper-bare`, …), and 4 and deeper are one cell, so a level-3 habit is learnt rather than assumed.
+  - A section (a heading that is not a task) after its sibling is counted apart from a task: `l2-sibling-section`, `l3-sibling-section`. A level-2 section after its sibling has a blank line before it 13 times in 17, and a level-2 task after a task once in 1,117. So the sibling `-prose` and `-bare` cells count tasks only.
+  - On 2026-11-22 the vault was split on a level-3 task right after its section's description (`l3-parent-prose`): 12 with a blank line, 21 without. The counts decide, so today it is none; making those consistent in Emacs changes the rule by itself. Only boundary gaps are counted, never leads. A cell needs at least 5 examples to be used; a tie goes to the built-in default.
 - The built-in default, used before the counts exist, is the rule above.
 - Settings → Diagnostics shows the counted cells (not built yet; `tools/spacing-report.mjs` prints them).
 - No spacing setting is stored separately in the app: the vault is the setting.
 
 ### Spacing review
-`tools/spacing-report.mjs` reads a vault (path given on the command line), counts the cells and lists every heading that goes against its cell's majority as `file:line — cell — has/lacks blank`. It is local and read-only, and its output is never committed. The owner reviews the list once, fixes in Emacs what was accidental, and keeps what was meant. The counts then get sharper on their own. There are 66 such headings today (2026-11-22). The 79 counted earlier included 4 blank lines before the first child of a bare parent, which this model reads as that parent's lead; the section cells took away 9 more.
+`tools/spacing-report.mjs` reads a vault (path given on the command line), counts the cells and lists every heading that goes against its cell's majority as `file:line — cell — has/lacks blank`. It is local and read-only, and its output is never committed. The owner reviews the list once, fixes in Emacs what was accidental, and keeps what was meant. The counts then get sharper on their own. There are 60 such headings today (2026-11-22). The 79 counted earlier included 4 blank lines before the first child of a bare parent, which this model reads as that parent's lead; the section cells and the level-3 cells took away more, and the owner has started fixing the rest in Emacs.
 
 ### Serialisable edits
 - Every edit is data: `{ path, op, key, args, v }`.

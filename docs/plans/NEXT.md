@@ -43,11 +43,11 @@ Run, in this folder:
 ```sh
 node tools/spacing-report.mjs > /tmp/spacing.txt   # read-only; don't commit the output
 ```
-It shows the blank-line habit of each cell, counted from the vault, then the headings that go against their cell's majority as `file:line — cell — has/lacks a blank`, then the count per file. For each one, fix in Emacs what was accidental and leave what was meant. Leaving one costs nothing: Rumbo keeps a heading's own blank lines when edits around it leave it in the same kind of place, and the rule only decides for new or moved headings. What the list holds today (66, after the section cells, 2026-11-22):
-- 27 level-2 headings that follow their parent's text with no blank line (the cell has one 84% of the time);
-- 16 level-3 tasks with a blank line before them (none 99% of the time), and 11 level-3 sections with one (none 65% of the time);
-- 4 level-2 sections after a sibling with no blank line (13 of 17 have one), and 1 level-2 task after a task with one;
-- 7 level-2 headings after a closed subtree with no blank line.
+It shows the blank-line habit of each cell, counted from the vault, then the headings that go against their cell's majority as `file:line — cell — has/lacks a blank`, then the count per file. For each one, fix in Emacs what was accidental and leave what was meant. Leaving one costs nothing: Rumbo keeps a heading's own blank lines when edits around it leave it in the same kind of place, and the rule only decides for new or moved headings. What the list holds today (60, after the section and level-3 cells, 2026-11-22):
+- 25 level-2 headings that follow their parent's text with no blank line (the cell has one 86% of the time);
+- 12 level-3 tasks with a blank line after their section's description: here the vault is split, 12 with and 21 without (`l3-parent-prose`), so the counted rule is none. If the blank line is the habit, add it to the 21 in Emacs and the rule follows. The 21 are listed by a one-off count in the session, not by the report: ML/Systems.org:495, Work/Blog.org:13, 32, Work/Prep.org:51, 180, 253, 265, 280, 291, 303, 311, Work/Products.org:50, 68, 88, 192, 230, 239, 252, 274, Work/Programming.org:625, 663 (line numbers as of 2026-11-22);
+- 8 level-3 headings after a closed subtree with a blank line (15 of 23 have none), and 6 level-3 tasks after a task with one;
+- 7 level-2 headings after a closed subtree with no blank line, and 2 level-2 sections after a sibling with none.
 
 The owner reviewed part of the first list on 2026-11-22: some are to be fixed in Emacs; a section set off after a run of tasks (Deep_Learning.org:32) is meant, and became the `l2-sibling-section` cell. Session 4 doesn't wait for the rest.
 
@@ -103,8 +103,8 @@ The owner reviewed part of the first list on 2026-11-22: some are to be fixed in
 **Findings and decisions**
 - After the owner's review (same day), two changes to §5:
   - **A heading that stayed where it was, in the same kind of place (its rule cell), keeps its own blank lines.** The rule decides only for new or moved headings, or ones now in a different kind of place. Before this, swapping two tasks above `** Activation functions` in Deep_Learning.org deleted the blank line before the section. Where the heading before it is taken out, the longer run stays (on a tie, its own).
-  - **Sections are counted apart from tasks** at levels 2 and 3 (`l2-sibling-section`, `l3-section`; the plain sibling cells now count tasks). This takes the report from 75 exceptions to 66. Test fixtures that meant tasks now say `TODO`.
-- The cells are Emacs's as written, with `l3+` split into `l3` and `l4+`. Splitting level 3 by shape as well wasn't needed: every level-3 shape has the majority "none" today. Leads are never counted, so "first child under a bare parent" isn't a cell, which is why the plan's 79 became 75.
+  - **Sections are counted apart from tasks** after a sibling (`l2-sibling-section`, `l3-sibling-section`; the plain sibling cells now count tasks), and **level 3 has the same cells as level 2**, so a task after its section's description at level 3 (`l3-parent-prose`) is learnt on its own. The report went from 75 exceptions to 60 (some of it the owner's fixes in Emacs). Test fixtures that meant tasks now say `TODO`.
+- The cells started as Emacs's, with `l3+` split into `l3` and `l4+`; the review then split level 3 by shape (above). Leads are never counted, so "first child under a bare parent" isn't a cell, which is why the plan's 79 became 75.
 - The plan's "known edge" needed a memory to make "move back" exact. The edge memory is keyed by identity (title and own notes), so state and level changes don't break it. For replay, session 5 should pass the memory of the commit's base text.
 - A bare parent that loses its only child loses its lead (the run becomes a boundary gap). When a child comes back, the lead is taken from the memory. This was found by the property tests.
 - `setHeading`, `extractSubtree` and `insertSubtree` were added to the op list. The dialog orders its ops planning, then notes, then heading.

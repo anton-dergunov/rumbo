@@ -96,23 +96,25 @@ export const nodeIdentity = (nd, lines) => identity(nd.h.title, lines.slice(nd.b
  * The rule cell for the boundary gap before a heading at `level`, after the heading `pred`
  * ({level, hasBody}, or null for the first heading of the file); `section` when the heading is not
  * a task. The cells of Emacs's `ps/blank-lines-rule-cell`, with two changes:
- *   - level 3 is counted apart from 4 and deeper;
- *   - at levels 2 and 3 a section is counted apart from a task: a section that follows its sibling
- *     starts a new part (13 of 17 have a blank line in the vault), a task after a task hardly ever
- *     does (1 of 1,117). So l2-sibling-prose and -bare are for tasks.
+ *   - level 3 gets the same cells as level 2, by what precedes it (the parent's text, a closed
+ *     subtree, a sibling), so a level-3 habit is learnt rather than assumed; 4 and deeper are one cell;
+ *   - a section after its sibling is counted apart from a task: it starts a new part (13 of 17
+ *     level-2 sections have a blank line in the vault), a task after a task hardly ever does (1 of
+ *     1,117). So the sibling -prose and -bare cells are for tasks.
  */
 export function cellOf(level, pred, section = false) {
   if (level === 1) return "l1";
-  if (level === 3) return section ? "l3-section" : "l3";
   if (level >= 4) return "l4+";
-  if (!pred) return "l2-after-preamble";
+  const l = `l${level}`;
+  if (!pred) return `${l}-after-preamble`;
   const prose = pred.hasBody ? "prose" : "bare";
-  if (pred.level < level) return `l2-parent-${prose}`;
-  if (pred.level > level) return `l2-from-deeper-${prose}`;
-  return section ? "l2-sibling-section" : `l2-sibling-${prose}`;
+  if (pred.level < level) return `${l}-parent-${prose}`;
+  if (pred.level > level) return `${l}-from-deeper-${prose}`;
+  return section ? `${l}-sibling-section` : `${l}-sibling-${prose}`;
 }
 
-export const CELLS = ["l1", "l2-after-preamble", "l2-parent-prose", "l2-parent-bare", "l2-from-deeper-prose", "l2-from-deeper-bare", "l2-sibling-prose", "l2-sibling-bare", "l2-sibling-section", "l3", "l3-section", "l4+"];
+const SHAPES = ["after-preamble", "parent-prose", "parent-bare", "from-deeper-prose", "from-deeper-bare", "sibling-prose", "sibling-bare", "sibling-section"];
+export const CELLS = ["l1", ...SHAPES.map((x) => `l2-${x}`), ...SHAPES.map((x) => `l3-${x}`), "l4+"];
 
 /**
  * Before the vault is counted: a blank line marks a change of shape. One before a level-1 heading,
@@ -129,8 +131,8 @@ export const DEFAULT_RULE = {
   "l2-sibling-prose": 0,
   "l2-sibling-bare": 0,
   "l2-sibling-section": 1,
-  l3: 0,
-  "l3-section": 0,
+  // Level 3: none before any of them (§5's table: the vault's majority in every level-3 shape).
+  ...Object.fromEntries(SHAPES.map((x) => [`l3-${x}`, 0])),
   "l4+": 0,
 };
 

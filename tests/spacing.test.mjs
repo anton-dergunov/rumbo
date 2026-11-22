@@ -55,8 +55,12 @@ test("the cells are Emacs's, with level 3 apart from 4 and deeper", () => {
   // A section after its sibling starts a new part; a task after a task does not.
   assert.equal(cellOf(2, { level: 2, hasBody: true }, true), "l2-sibling-section");
   assert.equal(cellOf(2, { level: 1, hasBody: true }, true), "l2-parent-prose", "only the sibling cells are split");
-  assert.equal(cellOf(3, { level: 1, hasBody: true }), "l3");
-  assert.equal(cellOf(3, { level: 3, hasBody: false }, true), "l3-section");
+  // Level 3 has the same shapes as level 2: a task after a section's description is its own cell.
+  assert.equal(cellOf(3, { level: 2, hasBody: true }), "l3-parent-prose");
+  assert.equal(cellOf(3, { level: 4, hasBody: false }), "l3-from-deeper-bare");
+  assert.equal(cellOf(3, { level: 3, hasBody: true }), "l3-sibling-prose");
+  assert.equal(cellOf(3, { level: 3, hasBody: false }, true), "l3-sibling-section");
+  assert.equal(cellOf(3, null), "l3-after-preamble");
   assert.equal(cellOf(4, null, true), "l4+");
   assert.equal(cellOf(5, null), "l4+");
   assert.deepEqual(Object.keys(DEFAULT_RULE).sort(), [...CELLS].sort());
