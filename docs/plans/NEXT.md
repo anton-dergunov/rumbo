@@ -43,13 +43,13 @@ Run, in this folder:
 ```sh
 node tools/spacing-report.mjs > /tmp/spacing.txt   # read-only; don't commit the output
 ```
-It shows the blank-line habit of each cell, counted from the vault, then the 75 headings that go against their cell's majority as `file:line — cell — has/lacks a blank`, then the count per file. For each one, fix in Emacs what was accidental and leave what was meant. The counts sharpen by themselves, since Rumbo counts the vault every time it loads. What the list holds today:
+It shows the blank-line habit of each cell, counted from the vault, then the headings that go against their cell's majority as `file:line — cell — has/lacks a blank`, then the count per file. For each one, fix in Emacs what was accidental and leave what was meant. Leaving one costs nothing: Rumbo keeps a heading's own blank lines when edits around it leave it in the same kind of place, and the rule only decides for new or moved headings. What the list holds today (66, after the section cells, 2026-11-22):
 - 27 level-2 headings that follow their parent's text with no blank line (the cell has one 84% of the time);
-- 27 level-3 headings with a blank line before them (the cell has none 98% of the time). 20 of them follow a closed subtree or the parent's text, where about a third of level-3 headings have one: if that is a habit, say so and level 3 can be split by shape like level 2;
-- 9 + 5 level-2 siblings with a blank line between them;
+- 16 level-3 tasks with a blank line before them (none 99% of the time), and 11 level-3 sections with one (none 65% of the time);
+- 4 level-2 sections after a sibling with no blank line (13 of 17 have one), and 1 level-2 task after a task with one;
 - 7 level-2 headings after a closed subtree with no blank line.
 
-Session 4 doesn't wait for this.
+The owner reviewed part of the first list on 2026-11-22: some are to be fixed in Emacs; a section set off after a run of tasks (Deep_Learning.org:32) is meant, and became the `l2-sibling-section` cell. Session 4 doesn't wait for the rest.
 
 ## For the owner, before session 2
 
@@ -92,15 +92,18 @@ Session 4 doesn't wait for this.
 - Tools (read-only, output never committed), with the cases both of them run in `tools/op-cases.mjs`:
   - `tools/spacing-report.mjs` and `tools/vault-check.mjs`;
   - `tools/vault.mjs`: the vault path in the same order as `serve.py`, the files as `vault-files.js` picks them.
-- Tests: 118 pass with `npm install`.
+- Tests: 120 pass with `npm install`.
   - New: `spacing`, `ops`, the app's `org-edit` (the cases from the Emacs design are in it), and `edit-properties`. The last runs every op on every heading of the sample vault and of 300 generated outlines per run with fast-check, a new devDependency.
   - `org.test.mjs` now imports from `app/`. The old edit tests are kept as `prototype-org-edit.test.mjs`, against the frozen prototype.
 - **Real vault, checked read-only:**
   - `vault-check`: 35 files, 3,500 headings, every op and every round trip passed (moving or extracting a heading and putting it back, and a state change and back, all give the original bytes). No failures; 74 s.
-  - `spacing-report`: the cells reproduce the §5 table exactly (level 2 after a closed subtree 191 of 198; after the parent's text 147 of 174; siblings 14 of 1,134; level 3 27 of 1,274), with 75 headings against their cell.
+  - `spacing-report`: the cells reproduce the §5 table exactly (level 2 after a closed subtree 191 of 198; after the parent's text 147 of 174; siblings 14 of 1,134; level 3 27 of 1,274). With the section cells, 66 headings go against their cell.
 - Checked in WebKit against the fake GitHub, served under `/rumbo/` (Setup, first pull, then in edit mode: move down, delete, add a task, the task dialog), with no console errors; screenshots at the three sizes.
 
 **Findings and decisions**
+- After the owner's review (same day), two changes to §5:
+  - **A heading that stayed where it was, in the same kind of place (its rule cell), keeps its own blank lines.** The rule decides only for new or moved headings, or ones now in a different kind of place. Before this, swapping two tasks above `** Activation functions` in Deep_Learning.org deleted the blank line before the section. Where the heading before it is taken out, the longer run stays (on a tie, its own).
+  - **Sections are counted apart from tasks** at levels 2 and 3 (`l2-sibling-section`, `l3-section`; the plain sibling cells now count tasks). This takes the report from 75 exceptions to 66. Test fixtures that meant tasks now say `TODO`.
 - The cells are Emacs's as written, with `l3+` split into `l3` and `l4+`. Splitting level 3 by shape as well wasn't needed: every level-3 shape has the majority "none" today. Leads are never counted, so "first child under a bare parent" isn't a cell, which is why the plan's 79 became 75.
 - The plan's "known edge" needed a memory to make "move back" exact. The edge memory is keyed by identity (title and own notes), so state and level changes don't break it. For replay, session 5 should pass the memory of the commit's base text.
 - A bare parent that loses its only child loses its lead (the run becomes a boundary gap). When a child comes back, the lead is taken from the memory. This was found by the property tests.

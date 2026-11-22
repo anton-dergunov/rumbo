@@ -288,19 +288,22 @@ Rumbo adopts the Emacs model instead (`agentic-org-planner/lisp/ps-blank-lines-t
 - **Resolving a seam**, first rule that applies:
   1. **Known edge:** the same two neighbours were adjacent before the edit (a move back, an undo) → their old gap. "Before" is the text being edited, then the **edge memory**: the runs between neighbours in earlier versions of the file (as loaded, and after each edit on this page), keyed by each heading's identity (its title and its own non-blank notes; not its state or level). Headings whose identity isn't unique in the file are left out.
   2. **A bare heading's lead:** when the next heading is deeper than a heading with no notes, the run is that heading's `lead`. It keeps the lead it has; one that lost its lead (its only child went) gets it back from the edge memory, else none.
-  3. **The style rule:** the cell for (level, what precedes it) → its majority, from the table above.
-  4. **Keep** the gap that is there: at an insert both new seams take it; where two gaps merge, the longer one stays. Never zero it for lack of evidence: that deletes blank lines put in by hand (the Emacs "keep" rung).
+  3. **The next heading keeps its own blank lines** when it stayed where it was, in the same kind of place: the same rule cell as before the edit. The blank lines before a heading are part of the file's own formatting (a section set off after a run of tasks, for example), so an insert or a reorder next to it doesn't re-decide them. Where the heading before it was taken out, the longer of the two runs that met stays (on a tie, its own). Decided with the owner on 2026-11-22, after a reorder in the real vault lost such a blank line.
+  4. **The style rule:** the cell for (level, what precedes it) → its majority, from the table above. It decides for a new or moved heading, and for one now in a different kind of place (a later sibling that became the first child, for example).
+  5. **Keep** the gap that is there: at an insert both new seams take it; where two gaps merge, the longer one stays. Never zero it for lack of evidence: that deletes blank lines put in by hand (the Emacs "keep" rung).
 - The blank lines at the start and end of the file never move, and promote and demote keep every gap (their neighbours are the same).
 - All other gaps stay byte-identical.
 
 ### The style rule has one source: the vault
-- The cells are counted from the vault's own files every time it loads, using the cell definitions of `ps/blank-lines-rule-cell` as they are (`l1`, `l2-after-preamble`, `l2-parent-…`, `l2-from-deeper-…`, `l2-sibling-…`, each `-prose` or `-bare`), except that level 3 is counted apart from 4 and deeper, so a different level-3 habit is learnt rather than assumed. Only boundary gaps are counted, never leads. A cell needs at least 5 examples to be used; a tie goes to the built-in default.
+- The cells are counted from the vault's own files every time it loads, using the cell definitions of `ps/blank-lines-rule-cell` (`l1`, `l2-after-preamble`, `l2-parent-…`, `l2-from-deeper-…`, `l2-sibling-…`, each `-prose` or `-bare`), with two changes:
+  - Level 3 is counted apart from 4 and deeper, so a different level-3 habit is learnt rather than assumed.
+  - At levels 2 and 3, a section (a heading that is not a task) is counted apart from a task: `l2-sibling-section` and `l3-section`. A level-2 section after its sibling has a blank line before it 13 times in 17, and a level-2 task after a task once in 1,117. So `l2-sibling-prose` and `-bare` count tasks only. At level 3 a section has one 11 times in 31, so its majority is none. Only boundary gaps are counted, never leads. A cell needs at least 5 examples to be used; a tie goes to the built-in default.
 - The built-in default, used before the counts exist, is the rule above.
 - Settings → Diagnostics shows the counted cells (not built yet; `tools/spacing-report.mjs` prints them).
 - No spacing setting is stored separately in the app: the vault is the setting.
 
 ### Spacing review
-`tools/spacing-report.mjs` reads a vault (path given on the command line), counts the cells and lists every heading that goes against its cell's majority as `file:line — cell — has/lacks blank`. It is local and read-only, and its output is never committed. The owner reviews the list once, fixes in Emacs what was accidental, and keeps what was meant. The counts then get sharper on their own. There are 75 such headings today (2026-11-22). The 79 counted earlier included 4 blank lines before the first child of a bare parent, which this model reads as that parent's lead.
+`tools/spacing-report.mjs` reads a vault (path given on the command line), counts the cells and lists every heading that goes against its cell's majority as `file:line — cell — has/lacks blank`. It is local and read-only, and its output is never committed. The owner reviews the list once, fixes in Emacs what was accidental, and keeps what was meant. The counts then get sharper on their own. There are 66 such headings today (2026-11-22). The 79 counted earlier included 4 blank lines before the first child of a bare parent, which this model reads as that parent's lead; the section cells took away 9 more.
 
 ### Serialisable edits
 - Every edit is data: `{ path, op, key, args, v }`.

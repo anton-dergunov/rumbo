@@ -280,13 +280,18 @@ export function setBody(lines, hd, text) {
 //   - the same two headings were neighbours before: their old run;
 //   - the next heading is deeper than a heading with no body: that heading's own lead;
 //   - the edge memory (`ctx.memory`, from earlier versions) knows the two neighbours: that run;
-//   - the rule cell (`ctx.rule`, counted from the vault; null means the built-in default): its count;
+//   - the next heading stayed where it was, in the same kind of place (the same rule cell): it keeps
+//     the blank lines it had before it (the longer run, where the heading before it was taken out),
+//     so the file's own spacing survives a reorder or an insert next to it;
+//   - the rule cell (`ctx.rule`, counted from the vault; null means the built-in default): its count,
+//     for a new or moved heading, or one now in a different kind of place;
 //   - keep the run that was at that spot.
 // The blank lines at the start and the end of the file never move.
 
 const blankLine = () => ({ t: "", src: -1 });
 const runLines = (r) => (r.fixed ? r.lines : r.keep);
-const longer = (a, b) => (b.length > a.length ? b : a);
+/** Where two runs meet, the longer one stays; on a tie, the one before the next heading (`after`). */
+const longer = (before, after) => (before.length > after.length ? before : after);
 
 /** The file as a sequence of blocks and runs. `freshLines`: the lines come from elsewhere (a chunk from another file). */
 function sequence(lines, doc, { freshLines = false } = {}) {
@@ -298,6 +303,10 @@ function sequence(lines, doc, { freshLines = false } = {}) {
     h: nd.h,
     level: nd.level,
     hasBody: nd.hasBody,
+    section: nd.section,
+    // The kind of place it had (its rule cell), when the run before it was a boundary gap.
+    origCell: part.kinds[k] === "sep" ? cellOf(nd.level, k ? part.nodes[k - 1] : null, nd.section) : null,
+    moved: false,
     id: nodeIdentity(nd, lines),
     block: [t[nd.head], ...sl(nd.lead), ...sl(nd.body)],
     // With no body, the run after the heading is its lead when the next heading is deeper.
@@ -376,7 +385,9 @@ function resolveSeam(S, p, s, r, ctx, twice) {
   }
   const m = remembered();
   if (m) return m;
-  const v = predict(ctx.rule ?? null, cellOf(s.level, first ? null : p));
+  const cell = cellOf(s.level, first ? null : p, s.section);
+  if (!s.moved && s.origCell === cell) return r.keep;
+  const v = predict(ctx.rule ?? null, cell);
   if (v != null) return Array.from({ length: v }, blankLine);
   return r.keep;
 }
@@ -456,7 +467,7 @@ export function insertHeading(lines, doc, ref, where, fields, ctx = {}) {
   const target = !ref || where === "end" ? { fileEnd: true, level: fields.level || 1 } : where === "after" ? { after: ref } : { into: ref, at: where === "firstChild" ? "first" : "last" };
   const { k, level } = targetIndex(S, target);
   const out = newHeadingLines(fields, level);
-  const node = { h: null, level, hasBody: out.length > 1, id: identity(cleanTitle(fields.title || ""), out.slice(1)), block: fresh(out), hadLead: false, leadRun: [], origRun: [], origPrev: null };
+  const node = { h: null, level, hasBody: out.length > 1, section: !fields.state, origCell: null, moved: true, id: identity(cleanTitle(fields.title || ""), out.slice(1)), block: fresh(out), hadLead: false, leadRun: [], origRun: [], origPrev: null };
   insertAt(S, k, { nodes: [node], inner: [] });
   return assemble(S, ctx, lines.length, node);
 }
@@ -499,6 +510,7 @@ export function moveSubtree(lines, doc, hd, target, ctx = {}) {
   const k = indexOf(S, hd);
   const taken = cut(S, k, subtreeLast(S, k));
   const { k: to, level } = targetIndex(S, target);
+  for (const n of taken.nodes) n.moved = true;
   relevelNodes(taken.nodes, level - hd.level);
   insertAt(S, to, taken);
   return assemble(S, ctx, lines.length, taken.nodes[0]);
@@ -552,7 +564,7 @@ export function insertSubtree(lines, doc, chunk, fromLevel, target, ctx = {}) {
   if (!cdoc.headings.length || cdoc.headings[0].line !== 0 || cdoc.headings[0].level !== fromLevel) throw new Error("the moved text does not start with its heading");
   const C = sequence(chunk, cdoc, { freshLines: true });
   const taken = { nodes: C.nodes, inner: C.runs.slice(1, C.nodes.length) };
-  for (const n of taken.nodes) n.origPrev = null;
+  for (const n of taken.nodes) Object.assign(n, { origPrev: null, moved: true });
   const S = sequence(lines, doc);
   const { k, level } = targetIndex(S, target);
   relevelNodes(taken.nodes, level - fromLevel);

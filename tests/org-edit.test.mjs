@@ -284,21 +284,22 @@ test("move: up, down, into a section, out; only stars change in the moved lines"
 
 test("the two cases from the Emacs design: a bare parent's lead, a closing separator", () => {
   // The blank after * A is A's lead, so reordering A's children keeps it after A.
-  let d = parseOrg("* A\n\n** 1\n** 2\n** 3\n");
-  assert.equal(text(moveDown(d.lines, d, find(d, "1")), d), "* A\n\n** 2\n** 1\n** 3\n");
-  assert.equal(text(moveUp(d.lines, d, find(d, "3")), d), "* A\n\n** 1\n** 3\n** 2\n");
+  let d = parseOrg("* A\n\n** TODO 1\n** TODO 2\n** TODO 3\n");
+  assert.equal(text(moveDown(d.lines, d, find(d, "1")), d), "* A\n\n** TODO 2\n** TODO 1\n** TODO 3\n");
+  assert.equal(text(moveUp(d.lines, d, find(d, "3")), d), "* A\n\n** TODO 1\n** TODO 3\n** TODO 2\n");
   // The blank before ** 2 closes the level-3 block; it is a gap of the seam and stays put when y moves.
-  d = parseOrg("* S\n** 1\n*** x\n*** y\n\n** 2\n");
-  assert.equal(text(moveUp(d.lines, d, find(d, "y")), d), "* S\n** 1\n*** y\n*** x\n\n** 2\n");
-  assert.equal(text(deleteSubtree(d.lines, d, find(d, "y")), d), "* S\n** 1\n*** x\n\n** 2\n");
+  d = parseOrg("* S\n** 1\n*** TODO x\n*** TODO y\n\n** 2\n");
+  assert.equal(text(moveUp(d.lines, d, find(d, "y")), d), "* S\n** 1\n*** TODO y\n*** TODO x\n\n** 2\n");
+  assert.equal(text(deleteSubtree(d.lines, d, find(d, "y")), d), "* S\n** 1\n*** TODO x\n\n** 2\n");
 });
 
 test("a bare parent: a first child takes no blank; losing its only child, the gap is resolved", () => {
   let d = parseOrg("* P\n\n* Q\n");
   assert.equal(text(insertHeading(d.lines, d, find(d, "P"), "firstChild", { title: "X" }), d), "* P\n** X\n\n* Q\n");
   d = parseOrg("* P\n** X\n\n\n* Q\n");
-  assert.equal(text(deleteSubtree(d.lines, d, find(d, "X")), d), "* P\n\n* Q\n", "the l1 rule");
-  assert.equal(text(deleteSubtree(d.lines, d, find(d, "X"), { rule: COUNTED_EMPTY }), d), "* P\n\n\n* Q\n", "keep: the longer run");
+  assert.equal(text(deleteSubtree(d.lines, d, find(d, "X")), d), "* P\n\n\n* Q\n", "Q stays a level-1 heading after a heading: it keeps its two blank lines");
+  d = parseOrg("* P\n** X\n\n\n** Q\n");
+  assert.equal(text(deleteSubtree(d.lines, d, find(d, "X")), d), "* P\n** Q\n", "Q is now P's first child: P's lead, which is none");
 });
 
 test("blank lines that hold spaces stay, inside a body and in every untouched run", () => {
@@ -321,10 +322,10 @@ test("the end of the file: no final newline, trailing blank lines", () => {
 });
 
 test("the edge memory puts a moved heading back exactly", () => {
-  const raw = "#+TITLE: T\n\n* A\nbody\n\n** a1\n** a2\n\n* B\n** b1\n";
+  const raw = "#+TITLE: T\n\n* A\nbody\n\n** TODO a1\n** TODO a2\n\n* B\n** TODO b1\n";
   const d = parseOrg(raw);
   const once = moveSubtree(d.lines, d, find(d, "a2"), { into: find(d, "B"), at: "last" });
-  assert.equal(text(once, d), "#+TITLE: T\n\n* A\nbody\n\n** a1\n\n* B\n** b1\n** a2\n");
+  assert.equal(text(once, d), "#+TITLE: T\n\n* A\nbody\n\n** TODO a1\n\n* B\n** TODO b1\n** TODO a2\n");
   const d1 = parseOrg(text(once, d));
   const plain = moveSubtree(d1.lines, d1, find(d1, "a2"), { after: find(d1, "a1") });
   const remembered = moveSubtree(d1.lines, d1, find(d1, "a2"), { after: find(d1, "a1") }, { memory: edgeMemory(d) });
@@ -370,4 +371,37 @@ test("a heading is found again after the file changed", () => {
   const changed = parseOrg("* New top\n\n" + RAW);
   assert.equal(findHeading(changed, key).line, find(d, "Call the GP").line + 2);
   assert.equal(findHeading(parseOrg(RAW.replace("Call the GP", "Call the dentist")), key), null);
+});
+
+test("a heading that stays in the same kind of place keeps its blank lines: a section after a run of tasks", () => {
+  // Shaped like a real file: a run of tasks with notes, then a blank line, then a section of their parent.
+  const raw = "* Fundamentals\nWhy.\n\n** TODO Backprop\nnote\n** TODO Autodiff\nnote\n** TODO Residuals\nnote\n\n** Activation functions\n*** TODO Race them\n\n** Initialization\n";
+  const d = parseOrg(raw);
+  const counted = { cells: { "l2-sibling-prose": { 0: 50 }, "l2-sibling-section": { 0: 1, 1: 1 } }, files: 1 }; // the section cell has too few examples
+  for (const ctx of [{}, { rule: counted }]) {
+    // Reordering the tasks above it leaves the blank before the section where it is.
+    let r = moveDown(d.lines, d, find(d, "Autodiff"), ctx);
+    assert.equal(text(r, d), raw.replace("** TODO Autodiff\nnote\n** TODO Residuals\nnote\n", "** TODO Residuals\nnote\n** TODO Autodiff\nnote\n"));
+    r = moveUp(d.lines, d, find(d, "Residuals"), ctx);
+    assert.ok(text(r, d).includes("** TODO Autodiff\nnote\n\n** Activation functions"), "the section keeps its blank line");
+    // A new task at the end of the run: none before it, and the section keeps its blank line.
+    r = insertHeading(d.lines, d, find(d, "Residuals"), "after", { state: "TODO", title: "MLP" }, ctx);
+    assert.ok(text(r, d).includes("** TODO Residuals\nnote\n** TODO MLP\n\n** Activation functions"));
+    // Deleting the task before it: the longer of the two runs stays.
+    r = deleteSubtree(d.lines, d, find(d, "Residuals"), ctx);
+    assert.ok(text(r, d).includes("** TODO Autodiff\nnote\n\n** Activation functions"));
+  }
+  // A new section after the tasks gets the rule of a section after its sibling: a blank line.
+  const r = insertHeading(d.lines, d, find(d, "Residuals"), "after", { title: "Optimizers" });
+  assert.ok(text(r, d).includes("** TODO Residuals\nnote\n\n** Optimizers\n\n** Activation functions"));
+});
+
+test("a heading now in a different kind of place gets the rule, not its old blank lines", () => {
+  // b had a blank line before it as a level-1 heading; demoted into a's subtree by a move, it is a task among tasks.
+  const d = parseOrg("* a\n** TODO x\n** TODO y\n\n* TODO b\n");
+  const r = moveSubtree(d.lines, d, find(d, "y"), { fileEnd: true, level: 1 });
+  assert.equal(text(r, d), "* a\n** TODO x\n\n* TODO b\n\n* TODO y\n", "b keeps its blank; y, moved, gets the l1 rule");
+  const e = parseOrg("* P\nnote\n\n** TODO first\n** TODO second\n");
+  const r2 = deleteSubtree(e.lines, e, find(e, "first"));
+  assert.equal(text(r2, e), "* P\nnote\n\n** TODO second\n", "second is now after its parent's text: the rule, one blank");
 });

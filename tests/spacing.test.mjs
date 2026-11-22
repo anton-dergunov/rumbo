@@ -52,20 +52,25 @@ test("the cells are Emacs's, with level 3 apart from 4 and deeper", () => {
   assert.equal(cellOf(2, { level: 1, hasBody: false }), "l2-parent-bare");
   assert.equal(cellOf(2, { level: 3, hasBody: false }), "l2-from-deeper-bare");
   assert.equal(cellOf(2, { level: 2, hasBody: true }), "l2-sibling-prose");
+  // A section after its sibling starts a new part; a task after a task does not.
+  assert.equal(cellOf(2, { level: 2, hasBody: true }, true), "l2-sibling-section");
+  assert.equal(cellOf(2, { level: 1, hasBody: true }, true), "l2-parent-prose", "only the sibling cells are split");
   assert.equal(cellOf(3, { level: 1, hasBody: true }), "l3");
+  assert.equal(cellOf(3, { level: 3, hasBody: false }, true), "l3-section");
+  assert.equal(cellOf(4, null, true), "l4+");
   assert.equal(cellOf(5, null), "l4+");
   assert.deepEqual(Object.keys(DEFAULT_RULE).sort(), [...CELLS].sort());
 });
 
 test("counting: a fixture with known answers", () => {
-  const d = parseOrg("#+TITLE: x\n\n* A\n** a1\n** a2\n\n* B\ntext\n\n** b1\nbody\n** b2\n*** c\n\n** b3\n");
+  const d = parseOrg("#+TITLE: x\n\n* A\n** TODO a1\n** TODO a2\n\n* B\ntext\n\n** TODO b1\nbody\n** b2\n*** c\n\n** b3\n");
   const counts = countSpacing([d]);
   assert.equal(counts.files, 1);
   assert.deepEqual(counts.cells, {
     l1: { 1: 2 },
     "l2-sibling-bare": { 0: 1 },
     "l2-parent-prose": { 1: 1 },
-    "l2-sibling-prose": { 0: 1 },
+    "l2-sibling-section": { 0: 1 },
     "l2-from-deeper-bare": { 1: 1 },
   });
   // a1 under bare A and c under bare b2 sit in leads, which are not counted.
@@ -108,9 +113,9 @@ test("the spacing report lists the headings that go against their cell", async (
     { path: "b.org", text: "* X\n\n* Y\n* Z\n" },
   ];
   const out = spacingReport(files);
-  assert.ok(out.some((l) => /^l2-sibling-bare\s+5\s+0: 4, 1: 1\s+0 {2}\(80%\)$/.test(l)), out.join("\n"));
+  assert.ok(out.some((l) => /^l2-sibling-section\s+5\s+0: 4, 1: 1\s+0 {2}\(80%\)$/.test(l)), out.join("\n"));
   assert.ok(out.some((l) => /^l1\s+2\s+.*keep \(too few; default 1\)$/.test(l)));
   assert.ok(out.includes("1 headings go against their cell (6 follow it). Each is file:line — cell — what it has or lacks:"));
-  assert.ok(out.includes("a.org:8 — l2-sibling-bare — has a blank"));
+  assert.ok(out.includes("a.org:8 — l2-sibling-section — has a blank"));
   assert.deepEqual(spacingReport(files, "b.org").filter((l) => l.includes(" — l")), [], "--file limits the list, not the counts");
 });

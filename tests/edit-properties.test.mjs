@@ -3,7 +3,7 @@
 //   - the invariants of §5 hold (applyOp throws otherwise);
 //   - the runs between headings that are neighbours both before and after are byte-identical;
 //   - move then move back, extract then insert back, and a state change and back give the original bytes;
-//   - an insert's new seams follow the cell rule;
+//   - before a new heading the cell rule; after it the rule, or the next heading's own blank lines;
 //   - nothing edited means the same bytes.
 // fast-check is a devDependency: without `npm install` the generated part is skipped.
 
@@ -60,13 +60,18 @@ function checkText(text) {
         if (before.has(edge) && before.get(edge) !== run) fails.push(`${c.name} on line ${hd.line + 1}: an untouched run changed`);
       }
       if (c.name.startsWith("insert")) {
+        // Before the new heading: the rule. After it: the rule, or the next heading's own old blank lines.
         const part = partition(after);
         const k = part.nodes.findIndex((nd) => nd.head === r.at);
-        for (const j of [k, k + 1]) {
-          if (j < 0 || j >= part.nodes.length || part.kinds[j] !== "sep") continue;
-          const want = predict(null, cellOf(part.nodes[j].level, j ? part.nodes[j - 1] : null));
-          const got = part.runs[j][1] - part.runs[j][0];
-          if (want !== got) fails.push(`${c.name} on line ${hd.line + 1}: a new seam has ${got} blank lines, the rule says ${want}`);
+        const ruleAt = (j) => predict(null, cellOf(part.nodes[j].level, j ? part.nodes[j - 1] : null, part.nodes[j].section));
+        const len = (j) => part.runs[j][1] - part.runs[j][0];
+        if (k >= 0 && part.kinds[k] === "sep" && len(k) !== ruleAt(k)) fails.push(`${c.name} on line ${hd.line + 1}: ${len(k)} blank lines before the new heading, the rule says ${ruleAt(k)}`);
+        const j = k + 1;
+        if (k >= 0 && j < part.nodes.length && part.kinds[j] === "sep" && len(j) !== ruleAt(j)) {
+          const oldPart = partition(doc);
+          const o = oldPart.nodes.findIndex((nd) => r.map(nd.head) === part.nodes[j].head);
+          const own = o >= 0 ? oldPart.runs[o][1] - oldPart.runs[o][0] : null;
+          if (len(j) !== own) fails.push(`${c.name} on line ${hd.line + 1}: ${len(j)} blank lines after the new heading, neither the rule nor what was there`);
         }
       }
     }

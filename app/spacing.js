@@ -53,7 +53,7 @@ export function partition(doc, lines = doc.lines) {
     let be = to;
     while (be > ls && isBlank(lines[be - 1])) be--;
     const hasBody = be > ls;
-    const node = { h, level: h.level, head: h.line, hasBody, lead: hasBody ? [h.line + 1, ls] : [h.line + 1, h.line + 1], body: hasBody ? [ls, be] : [ls, ls] };
+    const node = { h, level: h.level, section: !h.state, head: h.line, hasBody, lead: hasBody ? [h.line + 1, ls] : [h.line + 1, h.line + 1], body: hasBody ? [ls, be] : [ls, ls] };
     runs.push(hasBody ? [be, to] : [h.line + 1, to]);
     kinds.push(!next ? "eof" : !hasBody && next.level > h.level ? "lead" : "sep");
     return node;
@@ -94,26 +94,30 @@ export const nodeIdentity = (nd, lines) => identity(nd.h.title, lines.slice(nd.b
 
 /**
  * The rule cell for the boundary gap before a heading at `level`, after the heading `pred`
- * ({level, hasBody}, or null for the first heading of the file). The cells of Emacs's
- * `ps/blank-lines-rule-cell`, with level 3 counted apart from 4 and deeper.
+ * ({level, hasBody}, or null for the first heading of the file); `section` when the heading is not
+ * a task. The cells of Emacs's `ps/blank-lines-rule-cell`, with two changes:
+ *   - level 3 is counted apart from 4 and deeper;
+ *   - at levels 2 and 3 a section is counted apart from a task: a section that follows its sibling
+ *     starts a new part (13 of 17 have a blank line in the vault), a task after a task hardly ever
+ *     does (1 of 1,117). So l2-sibling-prose and -bare are for tasks.
  */
-export function cellOf(level, pred) {
+export function cellOf(level, pred, section = false) {
   if (level === 1) return "l1";
-  if (level === 3) return "l3";
+  if (level === 3) return section ? "l3-section" : "l3";
   if (level >= 4) return "l4+";
   if (!pred) return "l2-after-preamble";
   const prose = pred.hasBody ? "prose" : "bare";
   if (pred.level < level) return `l2-parent-${prose}`;
   if (pred.level > level) return `l2-from-deeper-${prose}`;
-  return `l2-sibling-${prose}`;
+  return section ? "l2-sibling-section" : `l2-sibling-${prose}`;
 }
 
-export const CELLS = ["l1", "l2-after-preamble", "l2-parent-prose", "l2-parent-bare", "l2-from-deeper-prose", "l2-from-deeper-bare", "l2-sibling-prose", "l2-sibling-bare", "l3", "l4+"];
+export const CELLS = ["l1", "l2-after-preamble", "l2-parent-prose", "l2-parent-bare", "l2-from-deeper-prose", "l2-from-deeper-bare", "l2-sibling-prose", "l2-sibling-bare", "l2-sibling-section", "l3", "l3-section", "l4+"];
 
 /**
  * Before the vault is counted: a blank line marks a change of shape. One before a level-1 heading,
- * before the first heading, and before a level-2 heading that follows its parent's text or closes a
- * subtree; none elsewhere (§5).
+ * before the first heading, before a level-2 heading that follows its parent's text or closes a
+ * subtree, and before a level-2 section after its sibling; none elsewhere (§5).
  */
 export const DEFAULT_RULE = {
   l1: 1,
@@ -124,7 +128,9 @@ export const DEFAULT_RULE = {
   "l2-from-deeper-bare": 1,
   "l2-sibling-prose": 0,
   "l2-sibling-bare": 0,
+  "l2-sibling-section": 1,
   l3: 0,
+  "l3-section": 0,
   "l4+": 0,
 };
 
@@ -137,7 +143,7 @@ export function boundaryGaps(doc, part = partition(doc)) {
   part.nodes.forEach((nd, k) => {
     if (part.kinds[k] !== "sep") return;
     const pred = k > 0 ? part.nodes[k - 1] : null;
-    out.push({ node: nd, k, cell: cellOf(nd.level, pred), value: part.runs[k][1] - part.runs[k][0] });
+    out.push({ node: nd, k, cell: cellOf(nd.level, pred, nd.section), value: part.runs[k][1] - part.runs[k][0] });
   });
   return out;
 }
