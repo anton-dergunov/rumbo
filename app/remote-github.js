@@ -1,9 +1,9 @@
 // The vault's git repo on GitHub, through the REST API (docs/plans/real-app.md §3, "Remote
 // interface"). Only api.github.com sends CORS headers, so the app talks to it directly: no proxy,
-// and no third party sees the vault. This is the read side; the write side (blobs, trees,
-// commits, the ref update) comes with the push.
+// and no third party sees the vault. Reads (head, tree, blob, commit, compare, log) and writes
+// (blobs, trees, commits, the ref update, new branches) through the Git Data API.
 
-import { base64ToBytes } from "./gitobj.js";
+import { base64ToBytes, bytesToBase64, blobSha, toBytes } from "./gitobj.js";
 
 const API = "https://api.github.com";
 const JSON_ACCEPT = "application/vnd.github+json";
@@ -200,6 +200,51 @@ export function createRemote({ owner, repo, branch = "main", token, fetch: fetch
       date: c.commit.author?.date || "",
       parents: c.parents.map((p) => p.sha),
     }));
+  };
+
+  // ------------------------------------------------------------------------------ writing
+
+  /** Upload a blob; returns its SHA, checked against the SHA computed here. */
+  remote.createBlob = async (data) => {
+    const bytes = toBytes(data);
+    const [res, mine] = await Promise.all([json(`${repoPath}/git/blobs`, { method: "POST", body: { content: bytesToBase64(bytes), encoding: "base64" } }), blobSha(bytes)]);
+    if (res.sha !== mine) throw new RemoteError("server", "GitHub stored a file with a different checksum.", { detail: `${mine.slice(0, 7)} became ${String(res.sha).slice(0, 7)}` });
+    return res.sha;
+  };
+
+  /** A tree on `baseTree` with `entries` [{path, sha}] (sha null deletes the path); returns its SHA. */
+  remote.createTree = async (baseTree, entries) => {
+    const tree = entries.map(({ path, sha }) => ({ path, mode: "100644", type: "blob", sha }));
+    return (await json(`${repoPath}/git/trees`, { method: "POST", body: { base_tree: baseTree, tree } })).sha;
+  };
+
+  /** A commit object (the branch doesn't move): `{ sha, tree }`. */
+  remote.createCommit = async ({ message, tree, parents }) => {
+    const c = await json(`${repoPath}/git/commits`, { method: "POST", body: { message, tree, parents } });
+    return { sha: c.sha, tree: c.tree?.sha || tree };
+  };
+
+  /**
+   * A commit of `files` ({path: text}) on `parent`, whose tree is `baseTree`: one blob per file,
+   * then the tree, then the commit (§3). The branch doesn't move. Returns `{ sha, tree, blobs }`.
+   */
+  remote.makeCommit = async (parent, baseTree, files, message) => {
+    const paths = Object.keys(files);
+    const shas = await Promise.all(paths.map((p) => remote.createBlob(files[p])));
+    const blobs = Object.fromEntries(paths.map((p, i) => [p, shas[i]]));
+    const tree = await remote.createTree(baseTree, paths.map((p) => ({ path: p, sha: blobs[p] })));
+    const c = await remote.createCommit({ message, tree, parents: [parent] });
+    return { sha: c.sha, tree, blobs };
+  };
+
+  /** Move the branch to `sha`, only as a fast-forward. Anything else is `rejected` (422). */
+  remote.updateRef = async (sha) => {
+    await json(`${repoPath}/git/refs/heads/${encodePath(branch)}`, { method: "PATCH", body: { sha, force: false } });
+  };
+
+  /** A new branch `name` at `sha` (the rescue branch). */
+  remote.createBranch = async (name, sha) => {
+    await json(`${repoPath}/git/refs`, { method: "POST", body: { ref: `refs/heads/${name}`, sha } });
   };
 
   return remote;

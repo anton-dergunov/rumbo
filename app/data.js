@@ -96,8 +96,8 @@ export function buildModel(records, { name = "Plans" } = {}) {
   return {
     name,
     sample: false,
-    // Edits stay on the page until the write path exists (plan step 4).
-    writable: false,
+    // Edits become local commits in the replica (edits.js, store.js).
+    writable: true,
     ws,
     files,
     folders,

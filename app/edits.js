@@ -1,39 +1,44 @@
-// Applying edits: run ops (ops.js) on a file's lines, rebuild the model, keep the
-// reader's place (fold state, focus, open rows) on the re-parsed headings, record undo, and save.
+// Applying edits: run ops (ops.js) on a file's lines, rebuild the model, keep the reader's place
+// (fold state, focus, open rows) on the re-parsed headings, record undo, and store the edit.
 //
-// Saving: one save in flight at a time; edits made meanwhile go in the next one. A save sends each
-// file with the version it was read at. If the file changed underneath (409), the edits made since
-// the last save are applied again to the new text (the journal holds ops, ops.js), finding each heading by its title path; if any of
-// them cannot be placed, the file is reloaded and the owner is told. Only the sample vault's working
-// copy is written; edits to the real vault stay in memory in this prototype.
-//
-// In the app (plan step 2) the model is never writable, so edits stay on the page and save() is
-// never reached; plan step 4 replaces it with local commits through store.js.
+// Storing: the page changes at once; the edit then goes, in order, to store.recordEdit, which
+// writes the file's new working text and the local commit holding it in one transaction (edits
+// under 3 s apart fold into one commit). The sync engine pushes it (sync.js). If the store refuses
+// (the file changed meanwhile, or IndexedDB didn't answer), the owner is told and the page is
+// reloaded from what the store really holds. Undo goes the same way (store.undoEdit): before a
+// push it takes the edit off its commit, after a push it is a new commit with the old text.
 
 import { joinLines, headingKey, findHeading } from "./org-edit.js";
 import { applyOps, OpError } from "./ops.js";
 import { edgeMemory, mergeMemory } from "./spacing.js";
-import { parseOrg } from "./org.js";
+import { editRecord, undoSummary } from "./commits.js";
 import { rebuildFile } from "./data.js";
 import { state, overridesFor } from "./state.js";
 
 let model = null;
+let store = null;
 let notify = () => {};
 let redraw = () => {};
+let committed = () => {};
+let reload = () => {};
 
 export function setEditModel(m) {
   model = m;
+}
+/** The replica's store, where edits become local commits. */
+export function setStore(s) {
+  store = s;
 }
 /** `fn(notice)` shows a notice: {text, kind, action?: {label, run}, sticky?}. */
 export const onNotice = (fn) => (notify = fn);
 /** `fn(idMap)` draws the page again; idMap takes the old heading ids to the re-parsed ones. */
 export const onRedraw = (fn) => (redraw = fn);
+/** `fn()` after each edit or undo is stored (the sync engine is asked to push, debounced). */
+export const onCommitted = (fn) => (committed = fn);
+/** `fn()` when an edit could not be stored: the page is built again from the store. */
+export const onReload = (fn) => (reload = fn);
 
 const undoStack = [];
-const journal = new Map(); // path -> edits not yet saved, to re-apply after a conflict
-const dirty = new Set();
-let saving = false;
-let again = false;
 
 export const canUndo = () => undoStack.length > 0;
 export const readOnlyReason = (file) =>
@@ -107,15 +112,16 @@ function refusal(err) {
  */
 export function edit(path, label, build, { quiet = false } = {}) {
   const file = model.byPath.get(path);
-  const why = readOnlyReason(file);
+  const why = cantEdit(file);
   if (why) {
     notify({ text: why, kind: "error" });
     return null;
   }
-  let ops, result;
+  let ops, result, ctx;
   try {
     ops = asList(build(file.doc)).map((op) => ({ ...op, path }));
-    result = applyOps(file.doc.lines, file.doc, ops, ctxFor(file));
+    ctx = ctxFor(file);
+    result = applyOps(file.doc.lines, file.doc, ops, ctx);
   } catch (err) {
     notify({ text: refusal(err), kind: "error" });
     return null;
@@ -127,11 +133,9 @@ export function edit(path, label, build, { quiet = false } = {}) {
   rebuildFile(model, path, after);
   remember(file);
   const idMap = remap(path, oldDoc, file.doc, result.map);
-  undoStack.push({ label, files: [{ path, before, after }] });
-  if (undoStack.length > 20) undoStack.shift();
-  if (!journal.has(path)) journal.set(path, []);
-  journal.get(path).push({ ops });
-  queueSave([path]);
+  const rec = editRecord({ id: nextId(), label, ops, files: [{ path, before, after, doc: oldDoc, ctx }] });
+  pushUndo({ id: rec.id, label, summary: rec.summary, files: rec.files });
+  persist(() => store.recordEdit(rec));
   if (!quiet) notify({ text: label, kind: "done", action: { label: "Undo", run: undo } });
   redraw(idMap);
   return headingAt(file, result.at);
@@ -147,34 +151,35 @@ export function editTwo(srcPath, dstPath, label, take, put) {
   const src = model.byPath.get(srcPath);
   const dst = model.byPath.get(dstPath);
   for (const f of [src, dst]) {
-    const why = readOnlyReason(f);
+    const why = cantEdit(f);
     if (why) return notify({ text: why, kind: "error" }), null;
   }
   let a, b, opA, opB;
+  const ctxA = ctxFor(src);
+  const ctxB = ctxFor(dst);
   try {
     opA = { ...take(src.doc), path: srcPath };
-    a = applyOps(src.doc.lines, src.doc, [opA], ctxFor(src));
+    a = applyOps(src.doc.lines, src.doc, [opA], ctxA);
     opB = { ...put(dst.doc, a.results[0].chunk, a.results[0].level), path: dstPath };
-    b = applyOps(dst.doc.lines, dst.doc, [opB], ctxFor(dst));
+    b = applyOps(dst.doc.lines, dst.doc, [opB], ctxB);
   } catch (err) {
     notify({ text: refusal(err), kind: "error" });
     return null;
   }
-  const entry = { label, files: [] };
+  const files = [];
   const idMap = new Map();
-  for (const [f, r, op] of [[src, a, opA], [dst, b, opB]]) {
+  for (const [f, r, ctx] of [[src, a, ctxA], [dst, b, ctxB]]) {
     const before = f.text;
     const after = joinLines(r.lines, f.doc.finalNewline || !f.doc.lines.length);
     const oldDoc = f.doc;
     rebuildFile(model, f.path, after);
     remember(f);
     for (const [k, v] of remap(f.path, oldDoc, f.doc, r.map)) idMap.set(k, v);
-    entry.files.push({ path: f.path, before, after });
-    if (!journal.has(f.path)) journal.set(f.path, []);
-    journal.get(f.path).push({ ops: [op] });
+    files.push({ path: f.path, before, after, doc: oldDoc, ctx });
   }
-  undoStack.push(entry);
-  queueSave([srcPath, dstPath]);
+  const rec = editRecord({ id: nextId(), label, ops: [opA, opB], files });
+  pushUndo({ id: rec.id, label, summary: rec.summary, files: rec.files });
+  persist(() => store.recordEdit(rec));
   notify({ text: label, kind: "done", action: { label: "Undo", run: undo } });
   redraw(idMap);
   return headingAt(dst, b.at);
@@ -196,129 +201,48 @@ export function undo() {
     const oldDoc = file.doc;
     rebuildFile(model, f.path, f.before);
     for (const [k, v] of remapByKey(f.path, oldDoc, file.doc)) idMap.set(k, v);
-    if (!journal.has(f.path)) journal.set(f.path, []);
-    journal.get(f.path).push({ ops: null, restore: f });
   }
-  queueSave(entry.files.map((f) => f.path));
+  persist(() => store.undoEdit({ id: entry.id, label: `Undone: ${entry.label}`, summary: undoSummary(entry.summary), files: entry.files }));
   notify({ text: `Undone: ${entry.label.toLowerCase()}`, kind: "done" });
   redraw(idMap);
 }
 
-// ---------------------------------------------------------------- saving
+// ---------------------------------------------------------------- storing
 
-function queueSave(paths) {
-  for (const p of paths) dirty.add(p);
-  if (!model.writable) {
-    // Until the write path (plan step 4), edits stay on this page.
-    journal.clear();
-    dirty.clear();
-    setTimeout(() => notify({ text: "Changed on this page only: this version of Rumbo doesn't save edits yet.", kind: "memory" }), 1600);
-    return;
-  }
-  save();
+const session = Date.now().toString(36);
+let seq = 0;
+const nextId = () => `${session}-${++seq}`;
+
+function pushUndo(entry) {
+  undoStack.push(entry);
+  if (undoStack.length > 20) undoStack.shift();
 }
 
-let slowTimer = 0;
-async function save() {
-  if (saving) {
-    again = true;
-    return;
-  }
-  if (!dirty.size) return;
-  saving = true;
-  const paths = [...dirty];
-  dirty.clear();
-  const sent = new Map(paths.map((p) => [p, model.byPath.get(p).text]));
-  clearTimeout(slowTimer);
-  slowTimer = setTimeout(() => notify({ text: "Saving…", kind: "saving", sticky: true }), 600);
-  try {
-    const res = await fetch("/api/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: model.data, files: paths.map((p) => ({ path: p, version: model.byPath.get(p).version, text: sent.get(p) })) }),
-    });
-    const reply = await res.json().catch(() => ({}));
-    clearTimeout(slowTimer);
-    if (res.status === 409) {
-      resolveConflicts(reply.conflicts || [], paths);
-    } else if (!res.ok) {
-      throw new Error(reply.error || `HTTP ${res.status}`);
-    } else {
-      for (const s of reply.saved || []) {
-        const f = model.byPath.get(s.path);
-        f.version = s.version;
-        // Edits made while this save was in flight stay in the journal for the next save.
-        if (f.text === sent.get(s.path)) journal.delete(s.path);
-      }
-      notify({ text: "Saved", kind: "saved", quietIfActive: true });
-    }
-  } catch (err) {
-    clearTimeout(slowTimer);
-    for (const p of paths) dirty.add(p);
-    notify({ text: `Not saved: ${err.message}`, kind: "error", sticky: true, action: { label: "Retry", run: save } });
-  } finally {
-    saving = false;
-    if (again) {
-      again = false;
-      save();
-    }
-  }
+/** Why a file can't be edited now, or null. */
+function cantEdit(file) {
+  if (!model.writable || !store) return "This copy of the vault can't be edited yet.";
+  return readOnlyReason(file);
 }
 
-/** The files changed underneath: apply this page's unsaved edits again to their new text, or reload. */
-function resolveConflicts(conflicts, paths) {
-  const lost = [];
-  const idMap = new Map();
-  for (const c of conflicts) {
-    const file = model.byPath.get(c.path);
-    const pending = journal.get(c.path) || [];
-    let doc = parseOrg(c.text);
-    let lines = doc.lines;
-    let ok = pending.length > 0;
-    for (const j of pending) {
-      if (!j.ops) {
-        ok = false;
-        break;
-      }
-      try {
-        lines = applyOps(lines, doc, j.ops, ctxFor(file)).lines;
-        doc = parseOrg(joinLines(lines, doc.finalNewline));
-      } catch {
-        ok = false;
-        break;
-      }
-    }
-    const oldDoc = file.doc;
-    const mine = file.text;
-    if (ok) {
-      rebuildFile(model, c.path, joinLines(doc.lines, doc.finalNewline), c.version);
-      for (const [k, v] of remapByKey(c.path, oldDoc, file.doc)) idMap.set(k, v);
-      dirty.add(c.path);
-    } else {
-      rebuildFile(model, c.path, c.text, c.version);
-      for (const [k, v] of remapByKey(c.path, oldDoc, file.doc)) idMap.set(k, v);
-      journal.delete(c.path);
-      lost.push({ path: c.path, mine });
-    }
-    // An undo entry no longer matches a file that was reloaded.
-    for (let i = undoStack.length - 1; i >= 0; i--) if (undoStack[i].files.some((f) => f.path === c.path)) undoStack.splice(i, 1);
-  }
-  // Files of the same save that did not conflict were not written either: send them again.
-  for (const p of paths) if (!conflicts.some((c) => c.path === p)) dirty.add(p);
-  if (lost.length) {
-    const names = lost.map((l) => model.byPath.get(l.path).title).join(", ");
-    notify({
-      text: `${names} changed on another device. It was reloaded; your last change could not be applied.`,
-      kind: "conflict",
-      sticky: true,
-      action: { label: "Copy my version", run: () => navigator.clipboard?.writeText(lost.map((l) => l.mine).join("\n\n")) },
-    });
-  } else {
-    notify({ text: "The file changed on another device; your change was applied to the new version.", kind: "conflict" });
-  }
-  redraw(idMap);
-  save();
+// One write at a time, in the order the edits were made: each one's `before` is the text the one
+// before it left.
+let queue = Promise.resolve();
+let queued = 0;
+
+function persist(write) {
+  queued += 1;
+  queue = queue.then(write).then(
+    () => committed(),
+    (err) => {
+      // The page shows an edit the store doesn't hold: say so, and show what it does hold.
+      undoStack.length = 0;
+      notify({ text: `Not saved on this device: ${err.message}`, kind: "error", sticky: true });
+      reload();
+    },
+  );
 }
 
-window.addEventListener("online", () => save());
-document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && save());
+/** Resolves once every edit made so far is stored (or refused). */
+export const settled = () => queue;
+/** How many edits have been sent to the store; a reload checks that none came in while it read. */
+export const queuedCount = () => queued;

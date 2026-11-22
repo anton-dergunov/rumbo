@@ -1,10 +1,11 @@
 // An in-memory GitHub for one repo (docs/plans/real-app.md §8, "A fake GitHub"), behind an
 // injected `fetch`, so remote-github.js and sync.js run against it unchanged.
 //
-// This is the read side (plan step 2): refs with ETags and 304s, recursive trees, blobs, commits,
-// compare and the commit list. Objects are hashed the way git hashes them. Failures can be
-// injected per request. Plan step 4 adds the write endpoints (blobs, trees, commits, the ref
-// update by compare-and-swap, branches) and the actors.
+// Read side: refs with ETags and 304s, recursive trees, blobs, commits, compare and the commit
+// list. Write side: blobs, trees (with base_tree), commits, the ref update (only a fast-forward,
+// as GitHub does with force: false) and new branches. Objects are hashed the way git hashes
+// them. Failures can be injected per request, before it is carried out or after (the answer is
+// lost), and `beforeRequest` lets another actor (Emacs) push between any two requests.
 
 import { createHash } from "node:crypto";
 
@@ -28,6 +29,7 @@ export function createFakeGitHub({ owner = "me", repo = "vault", branch = "main"
   const refs = new Map(); // branch -> commit sha
   const failures = [];
   const calls = [];
+  let requests = 0;
   let remaining = rateLimit;
   let clock = Date.parse("2026-11-01T09:00:00Z");
 
@@ -52,7 +54,7 @@ export function createFakeGitHub({ owner = "me", repo = "vault", branch = "main"
       }
     }
     const entries = [];
-    for (const [name, data] of here) entries.push({ name, mode: "100644", type: "blob", sha: putBlob(data) });
+    for (const [name, data] of here) entries.push({ name, mode: "100644", type: "blob", sha: data?.blobSha || putBlob(data) });
     for (const [name, inner] of sub) entries.push({ name, mode: "40000", type: "tree", sha: putTree(inner) });
     // Git orders entries by name, a directory as if its name ended in "/".
     const sortKey = (e) => (e.type === "tree" ? `${e.name}/` : e.name);
@@ -119,6 +121,17 @@ export function createFakeGitHub({ owner = "me", repo = "vault", branch = "main"
     blobs,
     commits,
     head: () => refs.get(branch) || null,
+    ref: (name) => refs.get(name) || null,
+    /** The files of a commit as text: { path: text }. */
+    filesAt: (sha) => Object.fromEntries(Object.entries(filesAt(sha)).map(([p, b]) => [p, new TextDecoder().decode(b)])),
+    /** The first-parent history of the branch, newest first: [{ sha, message, author, parents }]. */
+    log(name = branch) {
+      const out = [];
+      for (let sha = refs.get(name); sha; sha = commits.get(sha).parents[0]) out.push({ sha, ...commits.get(sha) });
+      return out;
+    },
+    /** Called before each request is handled, with its number (from 1), method and path. */
+    beforeRequest: null,
     /**
      * Commit on the branch (as Emacs would push): `changes` maps a path to its new text, or to
      * null to delete it. Returns the new commit's SHA.
@@ -142,13 +155,20 @@ export function createFakeGitHub({ owner = "me", repo = "vault", branch = "main"
     },
     /**
      * Make matching requests fail. `match(path, init)` picks them; `times` how many (default 1).
-     * `status` with optional `headers`, or `network: true` for a request that never arrives.
+     * `status` with optional `headers`, or `network: true` for a request that never arrives, or
+     * `after: true` for one that is carried out but whose answer is lost.
      */
-    fail({ match = () => true, times = 1, status = 500, headers = {}, network = false, message = "fake failure" }) {
-      failures.push({ match, times, status, headers, network, message });
+    fail({ match = () => true, times = 1, status = 500, headers = {}, network = false, after = false, message = "fake failure" }) {
+      failures.push({ match, times, status, headers, network, after, message });
     },
     rateLimit: () => remaining,
-    fetch: async (url, init = {}) => handle(new URL(url), init),
+    requests: () => requests,
+    fetch: async (url, init = {}) => {
+      const u = new URL(url);
+      const n = ++requests;
+      await fake.beforeRequest?.(n, init.method || "GET", decodeURIComponent(u.pathname));
+      return handle(u, init);
+    },
   };
 
   // ------------------------------------------------------------------------- the endpoints
@@ -164,7 +184,6 @@ export function createFakeGitHub({ owner = "me", repo = "vault", branch = "main"
   const notFound = () => json({ message: "Not Found" }, 404);
 
   async function handle(url, init) {
-    const prefix = `/repos/${owner}/${repo}`;
     const path = decodeURIComponent(url.pathname);
     const method = init.method || "GET";
     calls.push(`${method} ${path}${url.search}`);
@@ -177,12 +196,71 @@ export function createFakeGitHub({ owner = "me", repo = "vault", branch = "main"
     const failure = failures.find((f) => f.times > 0 && f.match(path, init));
     if (failure) {
       failure.times -= 1;
+      if (failure.after) {
+        await serve(url, init, path, method, header);
+        throw new TypeError("Failed to fetch");
+      }
       if (failure.network) throw new TypeError("Failed to fetch");
       return json({ message: failure.message }, failure.status, failure.headers);
     }
+    return serve(url, init, path, method, header);
+  }
+
+  async function serve(url, init, path, method, header) {
+    const prefix = `/repos/${owner}/${repo}`;
     if (!path.startsWith(prefix)) return notFound();
     const rest = path.slice(prefix.length);
     let m;
+
+    const body = () => JSON.parse(init.body || "{}");
+
+    if (method === "POST" && rest === "/git/blobs") {
+      remaining -= 1;
+      const b = body();
+      if (b.encoding !== "base64") return json({ message: "encoding" }, 422);
+      return json({ sha: putBlob(new Uint8Array(Buffer.from(b.content, "base64"))) }, 201);
+    }
+    if (method === "POST" && rest === "/git/trees") {
+      remaining -= 1;
+      const b = body();
+      const files = {};
+      if (b.base_tree) {
+        if (!trees.has(b.base_tree)) return json({ message: "base_tree not found" }, 422);
+        for (const e of flatten(b.base_tree)) if (e.type === "blob") files[e.path] = { blobSha: e.sha };
+      }
+      for (const e of b.tree || []) {
+        if (e.sha === null) delete files[e.path];
+        else if (!blobs.has(e.sha)) return json({ message: `blob ${e.sha} not found` }, 422);
+        else files[e.path] = { blobSha: e.sha };
+      }
+      return json({ sha: putTree(files) }, 201);
+    }
+    if (method === "POST" && rest === "/git/commits") {
+      remaining -= 1;
+      const b = body();
+      if (!trees.has(b.tree) || (b.parents || []).some((p) => !commits.has(p))) return json({ message: "tree or parent not found" }, 422);
+      const sha = makeCommit(b.tree, b.parents || [], b.message, "Rumbo");
+      return json({ sha, tree: { sha: b.tree }, parents: (b.parents || []).map((p) => ({ sha: p })), message: b.message }, 201);
+    }
+    if (method === "PATCH" && (m = rest.match(/^\/git\/refs\/heads\/(.+)$/))) {
+      remaining -= 1;
+      const b = body();
+      const cur = refs.get(m[1]);
+      if (!cur) return json({ message: "Reference does not exist" }, 422);
+      if (!commits.has(b.sha)) return json({ message: "Object does not exist" }, 422);
+      if (!b.force && !ancestry(b.sha).has(cur)) return json({ message: "Update is not a fast forward" }, 422);
+      refs.set(m[1], b.sha);
+      return json({ ref: `refs/heads/${m[1]}`, object: { sha: b.sha, type: "commit" } });
+    }
+    if (method === "POST" && rest === "/git/refs") {
+      remaining -= 1;
+      const b = body();
+      const name = String(b.ref || "").replace(/^refs\/heads\//, "");
+      if (refs.has(name)) return json({ message: "Reference already exists" }, 422);
+      if (!commits.has(b.sha)) return json({ message: "Object does not exist" }, 422);
+      refs.set(name, b.sha);
+      return json({ ref: `refs/heads/${name}`, object: { sha: b.sha, type: "commit" } }, 201);
+    }
 
     if ((m = rest.match(/^\/git\/ref\/heads\/(.+)$/))) {
       const sha = refs.get(m[1]);

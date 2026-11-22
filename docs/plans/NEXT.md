@@ -16,8 +16,8 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 | 2 | 2 | The app, read-only and offline (below) | §2, §3 (replica, Pull, engine), §4 (read side), §9 | **done** |
 | 3 | 3 | Blank lines: the gap model in `org-edit.js`, `applyOp` and serialisable ops, invariants, `tools/spacing-report.mjs`, `tools/vault-check.mjs`, property tests. The owner then reviews the spacing report. | §5, §8 (Blank lines) | **done** |
 | — | owner | Review the spacing report (below) | — | **done** |
-| 4 | 4a | `tests/fake-github.mjs` (its write side; session 2 made the read side) and the scenario harness (the Emacs actor, a second replica), then local commits (folding edits 3 s apart), push, the lost-response and interrupted-sync cases | §3 (Commit and push, engine, edge cases), §8 (fake, scenarios) | next |
-| 5 | 4b | Rebase (replay, then node-diff3), the conflict screen, rescue branch, reset, the zip, seeded random interleavings, `tools/e2e-github.mjs` | §3 (rebase), §4, §8 | needs 4 |
+| 4 | 4a | `tests/fake-github.mjs` (its write side; session 2 made the read side) and the scenario harness (the Emacs actor, a second replica), then local commits (folding edits 3 s apart), push, the lost-response and interrupted-sync cases | §3 (Commit and push, engine, edge cases), §8 (fake, scenarios) | **done** |
+| 5 | 4b | Rebase (replay, then node-diff3), the conflict screen, rescue branch, reset, the zip, seeded random interleavings, `tools/e2e-github.mjs` | §3 (rebase), §4, §8 | next |
 | 6 | 5 | Obsidian notes: `notes.js`, carrel's Markdown module, wiki links, embeds, footnotes | §6 | |
 | 7 | 6 | Task icons (a session in `agentic-org-planner`), then hardening on the devices | §7, §9 (iOS details) | |
 
@@ -70,6 +70,58 @@ It shows the blank-line habit of each cell, counted from the vault, then the hea
    ```
 
 ## Hand-off
+
+### Session 4 (2026-11-22)
+**Done**
+- `tests/fake-github.mjs`, write side:
+  - blobs, trees with `base_tree` (a `sha: null` entry deletes), commits, the ref update (fast-forward only, else 422, as with `force: false`) and `POST /git/refs`;
+  - `fail({after: true})`: the request is carried out and its answer lost;
+  - `beforeRequest(n, method, path)` for another writer;
+  - `filesAt`, `log`, `ref` for assertions.
+- `remote-github.js`, write side: `createBlob` (its SHA checked against the local hash), `createTree`, `createCommit`, `makeCommit(parent, baseTree, files, message)`, `updateRef`, `createBranch`. `commit(sha)` stays the read.
+- `store.js`, local commits:
+  - `recordEdit` (the working text and the commit in one transaction; folding under 3 s; refused as `stale` unless `before` is the stored working text);
+  - `undoEdit`, `seal`, `noteAttempt`, `markPushed`, `pending`;
+  - `applyPull` now allows pending commits when it touches none of their files (`pending-changed` otherwise).
+  - The record is in §3 (`parts`, `ctx`, `sealed`, `attempt` added). No schema change.
+- `commits.js`: messages from ops; `editRecord`, shared by `edits.js` and the test harness; `saveContext` and `restoreContext`. Only the edge memory beyond what the commit's text gives is stored.
+- `sync.js` `syncOnce`:
+  - head;
+  - settle lost answers;
+  - pull with rebase step 1 (`conflict` when a touched file changed upstream);
+  - push in order: seal, commit, attempt, ref update, `markPushed`;
+  - a refused ref update starts the sync again, up to 3 times.
+  The engine runs `syncOnce`; `conflict` is a stop.
+- `edits.js`: the prototype's save, journal and 409 handling are gone. Edits and undo go through one ordered write queue to the store. A refused write shows "Not saved on this device" and rebuilds the page from the store. `data.js` sets `writable: true`. The app pushes 3 s after the last stored edit, and `reloadModel` waits for queued writes. The Sync page lists the local commits and the push log lines.
+- Tests: 152 pass with `npm install`. New: `commits`, `scenarios` (15 scenarios, built on `tests/scenarios.mjs`), and the store's and remote's write sides.
+  - The kill test stops a sync at every request (before it and after it is carried out), with and without a pull first, restarts from IndexedDB and settles. Each edit is on `main` exactly once, the history is a line, and the replica matches `main`.
+  - Emacs pushes before every request of a sync.
+  - Two devices edit offline.
+  - A lost answer, also with Emacs on top; a 502 and a 401 on the push; a force-push with commits waiting.
+- Checked in WebKit, served under `/rumbo/` against the fake, with the sample vault:
+  - Setup; a Done and a Move made 0.5 s apart became one commit, "Rumbo: 2 edits in Career (iPad)";
+  - Undo after that push became "Rumbo: Undo: Move …";
+  - with pushes failing, the Sync page showed "1 not pushed", and "Check now" pushed it;
+  - screenshots at the three sizes; the only console errors were the injected 503s.
+- `vault-check` on the real vault: no failures.
+
+**Findings and decisions**
+- The plan's `commit(parent, files, message)` is `makeCommit`, because `commit(sha)` already reads one.
+- A sealed commit is never folded into or popped by undo. An undo of an edit in a sealed or pushed commit is a new opaque commit with the old text (no ops), which session 5 must send straight to the 3-way merge.
+- Edits that cancel out within one fold window (down, then up) leave no commit.
+- The base commit after a push is recorded with author "Rumbo" and the device's time. GitHub's history list shows the real author.
+- Testing note: in Playwright's sync Python API, `time.sleep` blocks the route handlers, so routed requests time out as "Load failed". Use `page.wait_for_timeout`. A scratch server for the fake must answer `OPTIONS` with CORS headers, as GitHub does, because writes are preflighted.
+
+**Left for session 5**
+- Replace the `conflict` stop in `pullTo` (`sync.js`, "Rebase, step 1 only") with the full rebase, per pending commit and file:
+  - replay `ops`, with `restoreContext(ctx[path], doc)`;
+  - else node-diff3 on `before`, `after` and the upstream text;
+  - else the conflict screen.
+  `applyPull` must then accept rebased commits for touched files in the same transaction. Today it refuses them, and that refusal is the guard.
+- An opaque part (an undo) has no ops, so a commit holding one can't be replayed. Go straight to diff3 for it.
+- The seeded random interleavings fit on `tests/scenarios.mjs` (`replica`, `edit`, `emacs` via `gh.push`, `settle`, `converged`).
+- The rescue branch can use `remote.createBranch` and the commits' `files.after`; the fake already supports it.
+- The edit-UI toast kinds `saved`, `saving` and `memory` are no longer used, and can go when the toast is next touched.
 
 ### Session 3 (2026-11-22)
 **Done**

@@ -84,7 +84,7 @@ Git it is. In the browser, **isomorphic-git is ruled out**: github.com's git end
 | `head()` | `GET /repos/{o}/{r}/git/ref/heads/{branch}` with `If-None-Match` |
 | `tree(sha)` | `GET /git/trees/{sha}?recursive=1` |
 | `blob(sha)` | `GET /git/blobs/{sha}` |
-| `commit(parent, files, message)` | `POST /git/blobs` for each changed file, then `POST /git/trees` with `base_tree`, then `POST /git/commits` |
+| `makeCommit(parent, baseTree, files, message)` | `POST /git/blobs` for each changed file (its SHA checked against the one computed here), then `POST /git/trees` with `base_tree`, then `POST /git/commits` |
 | `updateRef(sha)` | `PATCH /git/refs/heads/{branch}` with `force: false` |
 | `compare(base, head)` | `GET /compare/{base}...{head}` (is the new head a descendant?) |
 | `log(path?)` | `GET /commits?sha={branch}&path=…` |
@@ -126,9 +126,15 @@ A local commit is plain data:
   id, created, message,          // "Rumbo: Done \"Book dentist\" (iPad)"
   base,                          // the commit SHA it was made on
   ops: [{ path, op, key, args, v }],   // serialisable edits (§5)
-  files: { [path]: { before, after } } // text before and after, per file
+  files: { [path]: { before, after } }, // text before and after, per file
+  parts: [{ edit, label, n, opaque, summary, paths }], // the edits folded in; opaque = an undo, no ops
+  ctx: { [path]: { rule, memory } },   // the spacing context the edits used, for the replay
+  sealed,                              // a push has started; it takes no more edits
+  attempt                              // { sha, tree, blobs } of the commit made on GitHub
 }
 ```
+
+The id is a counter kept in `meta`, so the commits read back in order. The spacing context keeps only the edge memory that the commit's own text doesn't give (`commits.js`).
 
 Rules, most of them lessons from the sibling projects:
 - **Each edit is one transaction**: the new working text and the new local commit, together (calorie-logger `localDatabase.ts`). A crash leaves either both or neither.
@@ -156,13 +162,20 @@ Rules, most of them lessons from the sibling projects:
 ### Commit and push
 - An edit becomes a local commit at once. Edits less than about 3 s apart are folded into one commit, so a burst of reordering is one commit, not ten.
 - Messages are short and say what was done and where: `Rumbo: Done "Book dentist" (iPad)`, `Rumbo: Move 2 tasks to Errands (iPhone)`. Emacs writes `Auto backup: <time> (<host>)`, so the two are easy to tell apart in `git log`.
-- **Push** takes the pending commits in order. For each: `commit(parent, files, message)`, then `updateRef` with `force: false`. One remote commit per local commit, so history is as fine-grained as the edits.
+- **Push** takes the pending commits in order. For each:
+  - **seal** it, so no later edit folds into a commit that may already be on GitHub;
+  - `makeCommit(parent, baseTree, files, message)`;
+  - store the new commit's SHA as the commit's **attempt**;
+  - `updateRef` with `force: false`.
+  One remote commit per local commit, so history is as fine-grained as the edits. A refused ref update (someone pushed meanwhile) starts the sync again from the head, up to three times.
 - After a successful ref update, that local commit leaves `pending` and its text becomes the base, in one transaction.
+- **A lost answer:** at the start of a sync, while the first pending commit has an attempt, and the head is that commit or descends from it, it is counted as pushed. The attempt is stored before the ref update is asked for, so a kill at any point leaves either an attempt to check or nothing on `main`.
+- Undo before a push takes the edit off its commit (or drops the commit), as long as the commit isn't sealed.
 
 ### When GitHub moved on: rebase
 Emacs or another device pushed while this device had unpushed commits. The ref update fails, or the pull found a newer head. Unpushed commits exist only on this device, so rewriting them is safe, and the history stays linear.
 
-For each pending commit, in order, and for each file it touches:
+For each pending commit, in order, and for each file it touches (step 1 is built; until steps 2 to 4 are, a file changed on both sides stops the sync with `conflict` and keeps everything local):
 
 1. **The file did not change upstream** since the commit's base → keep the commit's text.
 2. **Replay the commit's ops** on the new upstream text, finding each heading by its title path (`headingKey` / `findHeading` in `org-edit.js`, what `edits.js` does on a 409 today). If every op lands → that is the new text. This is the best result, because it repeats the *intent* ("mark this task done") on the new text.

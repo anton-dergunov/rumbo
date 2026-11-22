@@ -1,7 +1,11 @@
-// Sync with the vault's repo on GitHub (docs/plans/real-app.md §3). This is the pull and the
-// engine that runs it; push and rebase come with plan step 4.
+// Sync with the vault's repo on GitHub (docs/plans/real-app.md §3): the pull, the push of local
+// commits, and the engine that runs them. Of the rebase, only its first step is here: GitHub moved
+// on but changed none of the files the local commits touch, so they stay as they are on the new
+// head. A file changed on both sides stops with `conflict` (replay and the 3-way merge are plan
+// step 4b).
 
 import { RemoteError } from "./remote-github.js";
+import { StoreError } from "./store.js";
 import { blobSha, bytesToText } from "./gitobj.js";
 import { isWanted } from "./vault-files.js";
 
@@ -18,6 +22,12 @@ export class SyncError extends Error {
 }
 
 const DIVERGED = "GitHub's branch was rewritten (a force-push), so it no longer continues from this device's copy. Nothing was changed here.";
+const CONFLICT = "A file edited here was also changed on GitHub. Merging the two comes in a later version of Rumbo; your edits are kept on this device.";
+/** How many times one sync starts again after losing a race (a ref update refused, an edit meanwhile). */
+const RETRIES = 3;
+
+/** A pass lost a race with another writer and starts again. */
+class Retry extends Error {}
 
 /** Bytes → the record kept in the replica. A file that is not UTF-8, or has CRs, is shown but never edited. */
 function fileRecord(path, sha, bytes) {
@@ -54,8 +64,13 @@ async function pool(items, n, fn) {
  */
 export async function pull({ remote, store, onProgress = () => {} }) {
   const meta = await store.getMeta();
-  const now = Date.now();
   const head = await remote.head(meta.etag || null);
+  return pullTo({ remote, store, meta, head, pending: await store.pending(), onProgress });
+}
+
+/** The pull once the head is known. With local commits waiting, a file they touch must not have changed upstream. */
+async function pullTo({ remote, store, meta, head, pending, onProgress = () => {} }) {
+  const now = Date.now();
   if (!head.changed || head.sha === meta.base) {
     await store.setMeta({ lastCheck: now, lastError: null, ...(head.changed ? { etag: head.etag } : {}) });
     return { changed: false, paths: [] };
@@ -77,6 +92,14 @@ export async function pull({ remote, store, onProgress = () => {} }) {
   const wanted = tree.entries.filter((e) => e.type === "blob" && isWanted(e.path));
   const have = new Map((await store.allFiles()).map((f) => [f.path, f]));
   const changed = wanted.filter((e) => have.get(e.path)?.sha !== e.sha);
+  const wantedPaths = new Set(wanted.map((e) => e.path));
+  const del = [...have.keys()].filter((p) => !wantedPaths.has(p));
+
+  // Rebase, step 1 only: a file touched here must be as it was upstream.
+  const touched = new Set(pending.flatMap((c) => Object.keys(c.files)));
+  const both = [...changed.map((e) => e.path), ...del].filter((p) => touched.has(p));
+  if (both.length) throw new SyncError("conflict", CONFLICT, both.join(", "));
+
   let done = 0;
   onProgress({ done, total: changed.length });
   const put = await pool(changed, BLOB_PARALLEL, async (e) => {
@@ -86,8 +109,6 @@ export async function pull({ remote, store, onProgress = () => {} }) {
     onProgress({ done: ++done, total: changed.length });
     return fileRecord(e.path, e.sha, bytes);
   });
-  const wantedPaths = new Set(wanted.map((e) => e.path));
-  const del = [...have.keys()].filter((p) => !wantedPaths.has(p));
   const c = await remote.commit(head.sha);
 
   await store.applyPull({
@@ -101,16 +122,103 @@ export async function pull({ remote, store, onProgress = () => {} }) {
     },
     put,
     del,
-    log: { kind: "pull", from: meta.base || null, to: head.sha, files: put.length, removed: del.length },
+    log: { kind: "pull", from: meta.base || null, to: head.sha, files: put.length, removed: del.length, kept: pending.length },
   });
   return { changed: true, paths: [...put.map((f) => f.path), ...del] };
+}
+
+/** Blob SHAs of a local commit's texts, as a push would have made them. */
+async function blobsOf(commit) {
+  const out = {};
+  for (const [path, f] of Object.entries(commit.files)) out[path] = await blobSha(f.after);
+  return out;
+}
+
+/**
+ * Local commits whose push reached GitHub though the answer was lost: the head is that commit, or
+ * descends from it (Emacs pulled it and pushed on top). Each is counted as pushed, in order.
+ */
+async function settleLost({ remote, store, headSha, acc }) {
+  let meta = await store.getMeta();
+  let pending = await store.pending();
+  while (pending.length && pending[0].attempt && headSha && headSha !== meta.base) {
+    const p = pending[0];
+    const a = p.attempt;
+    let landed = a.sha === headSha;
+    if (!landed) {
+      try {
+        const st = (await remote.compare(a.sha, headSha)).status;
+        landed = st === "ahead" || st === "identical";
+      } catch (e) {
+        if (!(e instanceof RemoteError && e.kind === "missing")) throw e;
+      }
+    }
+    if (!landed) break;
+    await store.markPushed(p.id, { sha: a.sha, tree: a.tree, blobs: a.blobs || (await blobsOf(p)), baseCommit: baseCommitOf(a.sha, p), lost: true });
+    acc.pushed += 1;
+    meta = await store.getMeta();
+    pending = await store.pending();
+  }
+  return { meta, pending };
+}
+
+const baseCommitOf = (sha, p) => ({ sha, message: p.message, author: "Rumbo", date: new Date().toISOString() });
+
+/** Push the local commits in order: seal, make the commit, keep it as the attempt, move the ref, mark it pushed. */
+async function pushPending({ remote, store, acc }) {
+  const meta = await store.getMeta();
+  let base = meta.base;
+  let tree = meta.tree || (base ? (await remote.commit(base)).tree : null);
+  for (const { id } of await store.pending()) {
+    const p = await store.seal(id);
+    const files = Object.fromEntries(Object.entries(p.files).map(([path, f]) => [path, f.after]));
+    const c = await remote.makeCommit(base, tree, files, p.message);
+    await store.noteAttempt(id, { sha: c.sha, tree: c.tree, blobs: c.blobs });
+    try {
+      await remote.updateRef(c.sha);
+    } catch (e) {
+      // Someone pushed since the head was read: pull, then push again.
+      if (e instanceof RemoteError && e.kind === "rejected") throw new Retry();
+      throw e;
+    }
+    await store.markPushed(id, { sha: c.sha, tree: c.tree, blobs: c.blobs, baseCommit: baseCommitOf(c.sha, p) });
+    acc.pushed += 1;
+    base = c.sha;
+    tree = c.tree;
+  }
+}
+
+/**
+ * One sync: read the head; count as pushed any local commit whose answer was lost; pull what
+ * GitHub has (keeping the local commits, rebase step 1); push the local commits. A pass that loses
+ * a race starts again, up to RETRIES times. Returns `{ changed, paths, pushed }`.
+ */
+export async function syncOnce({ remote, store, onProgress = () => {} }) {
+  const acc = { changed: false, paths: new Set(), pushed: 0 };
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const meta0 = await store.getMeta();
+      const head = await remote.head(meta0.etag || null);
+      const headSha = head.changed ? head.sha : meta0.base;
+      const { meta, pending } = await settleLost({ remote, store, headSha, acc });
+      const r = await pullTo({ remote, store, meta, head, pending, onProgress });
+      if (r.changed) acc.changed = true;
+      r.paths.forEach((p) => acc.paths.add(p));
+      await pushPending({ remote, store, acc });
+      return { changed: acc.changed, paths: [...acc.paths], pushed: acc.pushed };
+    } catch (e) {
+      const race = e instanceof Retry || (e instanceof StoreError && (e.code === "pending-changed" || e.code === "gone"));
+      if (!race) throw e;
+      if (attempt >= RETRIES) throw new RemoteError("rejected", "GitHub kept moving while this device pushed. It will try again.", { detail: "ref update refused" });
+    }
+  }
 }
 
 // ------------------------------------------------------------------------------------- engine
 
 /** Seconds to wait after the 1st, 2nd, 3rd… failure that is expected to clear. */
 export const BACKOFF = [5, 15, 60];
-const STOPPING = new Set(["auth", "missing", "diverged", "rejected"]);
+const STOPPING = new Set(["auth", "missing", "diverged", "rejected", "conflict"]);
 
 /**
  * The engine: one sync at a time, `again` for a trigger during a sync, backoff on failures that

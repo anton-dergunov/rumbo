@@ -30,6 +30,7 @@ export const state = {
 export const runtime = {
   meta: {}, // the replica's meta (repo, branch, base commit, last check, last error, …)
   sync: { status: "synced", lastError: null }, // from the sync engine
+  pending: [], // the local commits not yet pushed (store.js)
   updateWaiting: false,
 };
 

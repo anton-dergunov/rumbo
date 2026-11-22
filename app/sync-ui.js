@@ -1,6 +1,6 @@
-// The sync mark in the header and the Sync page (docs/plans/real-app.md §4). This is the read
-// side: where this device is, the last check and error, history from GitHub and the sync log.
-// Local commits, the rescue branch and the zip come with the write path (plan steps 4 and 5).
+// The sync mark in the header and the Sync page (docs/plans/real-app.md §4): where this device is,
+// the local commits not yet pushed, the last check and error, history from GitHub and the sync
+// log. Diffs per commit, the rescue branch and the zip come with plan step 4b.
 
 import { h, icon } from "./ui.js";
 import { state, runtime, actions } from "./state.js";
@@ -13,6 +13,7 @@ const CLASS_NAMES = {
   rejected: "refused by GitHub",
   server: "GitHub error",
   diverged: "branch rewritten",
+  conflict: "edited on both sides",
   error: "error",
 };
 
@@ -63,13 +64,26 @@ function commitList(list) {
   );
 }
 
+/** The local commits, oldest first: message, files, when. */
+function pendingList(list) {
+  return h(
+    "ol",
+    { class: "sy-commits" },
+    list.map((c) =>
+      h("li", null, h("span", null, firstLine(c.message)), h("span", { class: "muted" }, ` · ${Object.keys(c.files).join(", ")} · ${when(c.updated)}`, c.attempt ? " · sent, not confirmed" : "")),
+    ),
+  );
+}
+
 function logLine(e) {
   const text =
     e.kind === "pull"
       ? `Pulled ${short(e.from)} → ${short(e.to)}: ${e.files} file${e.files === 1 ? "" : "s"} changed${e.removed ? `, ${e.removed} removed` : ""}`
       : e.kind === "error"
         ? `${CLASS_NAMES[e.class] || e.class}: ${e.message}${e.detail ? ` (${e.detail})` : ""}`
-        : e.kind === "reset"
+        : e.kind === "push"
+          ? `Pushed ${short(e.sha)}: ${firstLine(e.message)}${e.lost ? " (the answer was lost; found on GitHub)" : ""}`
+          : e.kind === "reset"
           ? "Reset to GitHub: the local copy was forgotten"
           : e.kind === "setup"
             ? `Set up for ${e.repo} (${e.branch})`
@@ -92,7 +106,7 @@ export function renderSync(model) {
     h("h2", { class: "sy-h" }, "Where this device is"),
     row("Repo", `${m.repo || "—"} · ${m.branch || "main"}`),
     row("Base commit", c ? [h("code", null, short(c.sha)), " ", firstLine(c.message), h("span", { class: "muted" }, ` · ${c.author} · ${when(c.date)}`)] : "none yet"),
-    row("Local commits", "none: this version doesn't save edits yet"),
+    row("Local commits", runtime.pending.length ? `${runtime.pending.length} not pushed` : "none: everything is on GitHub"),
     row("Status", s.status === "syncing" ? "syncing…" : s.status === "synced" ? "up to date" : CLASS_NAMES[err?.kind] || s.status),
     row("Last check", when(m.lastCheck)),
     err ? row("Last error", h("span", { class: "sy-err" }, `${CLASS_NAMES[err.kind] || err.kind}: ${err.message}`), err.detail ? h("span", { class: "muted" }, ` (${err.detail})`) : null) : null,
@@ -100,11 +114,12 @@ export function renderSync(model) {
       "p",
       { class: "sy-actions" },
       h("button", { class: "sy-btn", disabled: s.status === "syncing", onclick: () => actions.syncNow() }, icon("sync"), "Check now"),
-      s.stoppedBy === "diverged"
+      s.stoppedBy === "diverged" && !runtime.pending.length
         ? h("button", { class: "sy-btn", onclick: () => confirm("Forget this device's copy and download GitHub's branch again? Nothing here is unsaved.") && actions.resetReplica() }, icon("restart_alt"), "Reset to GitHub")
         : null,
       s.stoppedBy === "auth" || s.stoppedBy === "missing" ? h("button", { class: "sy-btn", onclick: () => actions.openSetup() }, icon("key"), "Setup") : null,
     ),
+    runtime.pending.length ? [h("h2", { class: "sy-h" }, "Local commits"), pendingList(runtime.pending)] : null,
     h("h2", { class: "sy-h" }, "History on GitHub"),
     commitList(page.vault),
     file ? [h("h2", { class: "sy-h" }, `History of ${file.name}`), commitList(page.file)] : null,

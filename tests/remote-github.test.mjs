@@ -149,3 +149,59 @@ test("classifyStatus without a rate-limit header: 403 is auth, 429 is still a ra
   assert.equal(classifyStatus(429, none), "rate-limited");
   assert.equal(classifyStatus(500, none), "server");
 });
+
+// ------------------------------------------------------------------- the write side, on the fake
+
+import { createFakeGitHub } from "./fake-github.mjs";
+
+function onFake() {
+  const gh = createFakeGitHub();
+  gh.push({ "Inbox.org": "* TODO Call\n", "Work/Plan.org": "* NEXT Write\n" }, "First");
+  const remote = createRemote({ owner: gh.owner, repo: gh.repo, token: "t", fetch: gh.fetch });
+  return { gh, remote };
+}
+
+test("commit makes blobs, a tree on the base tree and a commit; updateRef moves the branch", async () => {
+  const { gh, remote } = onFake();
+  const parent = gh.head();
+  const base = await remote.commit(parent);
+  const text = "* DONE Call  \n\n\n* TODO É\n";
+  const c = await remote.makeCommit(parent, base.tree, { "Inbox.org": text }, "Rumbo: Done \"Call\" (iPad)");
+  assert.equal(c.blobs["Inbox.org"], await blobSha(text));
+  assert.equal(gh.head(), parent, "creating a commit doesn't move the branch");
+  await remote.updateRef(c.sha);
+  assert.equal(gh.head(), c.sha);
+  assert.deepEqual(gh.filesAt(c.sha), { "Inbox.org": text, "Work/Plan.org": "* NEXT Write\n" });
+  const [top] = gh.log();
+  assert.equal(top.message, "Rumbo: Done \"Call\" (iPad)");
+  assert.deepEqual(top.parents, [parent]);
+  assert.equal((await remote.commit(c.sha)).tree, c.tree);
+});
+
+test("a ref update that is not a fast-forward is rejected", async () => {
+  const { gh, remote } = onFake();
+  const parent = gh.head();
+  const tree = (await remote.commit(parent)).tree;
+  const c = await remote.makeCommit(parent, tree, { "Inbox.org": "* mine\n" }, "Rumbo: mine");
+  gh.push({ "Work/Plan.org": "* theirs\n" });
+  await assert.rejects(remote.updateRef(c.sha), (e) => e.kind === "rejected" && e.status === 422 && /fast forward/.test(e.detail));
+  assert.notEqual(gh.head(), c.sha);
+});
+
+test("a blob GitHub stores under another SHA is an error", async () => {
+  const { gh } = onFake();
+  const fetch = async (url, init) => {
+    const res = await gh.fetch(url, init);
+    if (!String(url).endsWith("/git/blobs")) return res;
+    return new Response(JSON.stringify({ sha: "0".repeat(40) }), { status: 201 });
+  };
+  const remote = createRemote({ owner: gh.owner, repo: gh.repo, token: "t", fetch });
+  await assert.rejects(remote.createBlob("x\n"), (e) => e.kind === "server" && /checksum/.test(e.message));
+});
+
+test("createBranch makes a new ref, and refuses one that exists", async () => {
+  const { gh, remote } = onFake();
+  await remote.createBranch("rumbo/rescue-2026-11-22-1800", gh.head());
+  assert.equal(gh.ref("rumbo/rescue-2026-11-22-1800"), gh.head());
+  await assert.rejects(remote.createBranch("main", gh.head()), (e) => e.kind === "rejected");
+});

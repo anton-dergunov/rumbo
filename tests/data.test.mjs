@@ -34,9 +34,9 @@ test("a path gives the folder, base and display name", () => {
   assert.deepEqual(describePath("Inbox.org").folder, "");
 });
 
-test("the working text wins over the base text, and the model is not writable yet", () => {
+test("the working text wins over the base text, and the model is writable", () => {
   const m = buildModel([{ path: "A.org", sha: "s", text: "* TODO old\n", work: "* TODO new\n", readOnly: null }]);
   assert.equal(m.files[0].doc.headings[0].title, "new");
-  assert.equal(m.writable, false);
+  assert.equal(m.writable, true);
   assert.equal(buildModel([]).files.length, 0);
 });

@@ -6,12 +6,12 @@ import { buildModel } from "./data.js";
 import { setModel, h } from "./ui.js";
 import { setOutlineModel, reveal } from "./outline.js";
 import { renderShell, sizeClass } from "./shell.js";
-import { setEditModel, onRedraw, undo } from "./edits.js";
+import { setEditModel, setStore, onRedraw, onCommitted, onReload, settled, queuedCount, undo } from "./edits.js";
 import { mountLayer, setEditUiModel, setLayerSize, panelOpen } from "./edit-ui.js";
 import { headingKey, findHeading } from "./org-edit.js";
 import { openStore } from "./store.js";
 import { createRemote } from "./remote-github.js";
-import { pull, createEngine, attachTriggers } from "./sync.js";
+import { pull, syncOnce, createEngine, attachTriggers } from "./sync.js";
 import { renderSetup } from "./setup.js";
 import { startPwa, onStatus as onPwaStatus, applyUpdate } from "./pwa.js";
 
@@ -23,6 +23,7 @@ viewport.append(appRoot);
 mountLayer(viewport);
 
 const store = openStore();
+setStore(store);
 const scrolls = new Map();
 let model = null;
 let remote = null;
@@ -138,9 +139,19 @@ function carryOver(old, next, paths) {
   return idMap;
 }
 
+/** The model from the store again. Edits still being written land first, so the redraw can't drop one. */
+async function readModel() {
+  for (;;) {
+    await settled();
+    const n = queuedCount();
+    const records = await store.allFiles();
+    if (n === queuedCount()) return buildModel(records, { name: repoName(runtime.meta) });
+  }
+}
+
 async function reloadModel(paths) {
   const old = model;
-  const next = buildModel(await store.allFiles(), { name: repoName(runtime.meta) });
+  const next = await readModel();
   const idMap = old ? carryOver(old, next, paths) : new Map();
   model = next;
   anchored(() => update(), idMap);
@@ -208,11 +219,12 @@ function startSync() {
   const [owner, repo] = m.repo.split("/");
   remote = createRemote({ owner, repo, branch: m.branch || "main", token: m.token });
   engine?.stop();
-  engine = createEngine({ run: () => pull({ remote, store }), store });
+  engine = createEngine({ run: () => syncOnce({ remote, store }), store });
   let shown = markState();
   engine.onStatus(async (st) => {
     runtime.sync = st;
     runtime.meta = await store.getMeta().catch(() => runtime.meta);
+    runtime.pending = await store.pending().catch(() => runtime.pending);
     if (st.result?.changed) return reloadModel(st.result.paths);
     // Redraw only when something on screen depends on it.
     const now = markState();
@@ -338,6 +350,17 @@ actions.applyUpdate = async () => {
 };
 onRedraw((idMap) => anchored(() => update(), idMap));
 
+// An edit is stored: push it once the owner pauses (edits under 3 s apart are one commit anyway).
+let pushTimer = 0;
+onCommitted(async () => {
+  runtime.pending = await store.pending().catch(() => runtime.pending);
+  if (state.view === "sync") render();
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => engine?.sync("edit"), 3000);
+});
+// An edit the store refused: show what the store holds. Every changed path is carried over.
+onReload(() => reloadModel(model ? model.files.map((f) => f.path) : []));
+
 // ---------------------------------------------------------------- start
 
 const typing = (e) => e.target.closest?.("input, textarea, [contenteditable]");
@@ -387,6 +410,7 @@ async function boot() {
   if (!meta.repo || !meta.token) return showSetup({ ...(await checkPageSettings()), ...meta });
 
   model = buildModel(await store.allFiles(), { name: repoName(meta) });
+  runtime.pending = await store.pending().catch(() => []);
   const after = restorePlace(place);
   update();
   after?.();
