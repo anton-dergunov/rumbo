@@ -19,7 +19,8 @@ const DRIFT = 8; // px a held finger may drift before it counts as a scroll
 const SWIPE_START = 10;
 const SWIPE_RATIO = 1.4;
 const SWIPE_OPEN = 56;
-const SWIPE_BTN_H = 44; // px: the smallest a swipe button gets, whatever the row's height
+const SWIPE_BTN_H = 40; // px: the smallest a swipe button gets, whatever the row's height
+const SWIPE_GAP = 10; // px between the buttons and the row's text once it has slid aside
 const EDGE = 56; // px from the scroller's top or bottom where dragging scrolls
 
 let openSwipe = null;
@@ -305,16 +306,31 @@ export function attachGestures(root, hooks) {
     const left = mk("left");
     const right = mk("right");
     node.prepend(left, right);
-    sw = { node, head: g.head, left, right, width: { left: 0, right: 0 } };
-    sw.width.left = left.offsetWidth;
-    sw.width.right = right.offsetWidth;
+    sw = { node, head: g.head, left, right, width: { left: left.offsetWidth, right: right.offsetWidth } };
+    reveal(sw, 0, false);
+  }
+
+  /**
+   * Show the buttons on the side the row slid away from, only as wide as the room it left (less the
+   * gap), and hide the other side. A button taller than a short row would otherwise peek out above
+   * and below it, and both sides would show behind the row while it moves.
+   */
+  function reveal(s, x, animate) {
+    for (const [side, strip] of [["left", s.left], ["right", s.right]]) {
+      const w = s.width[side];
+      const on = side === "left" ? x > 0 : x < 0;
+      const shown = on ? Math.max(0, Math.min(w, Math.abs(x) - SWIPE_GAP)) : 0;
+      strip.style.transition = animate ? "" : "none";
+      strip.style.clipPath = side === "left" ? `inset(0 ${w - shown}px 0 0)` : `inset(0 0 0 ${w - shown}px)`;
+    }
   }
 
   function moveSwipe(dx) {
-    const max = dx > 0 ? sw.width.left : sw.width.right;
+    const max = (dx > 0 ? sw.width.left : sw.width.right) + SWIPE_GAP;
     const x = Math.sign(dx) * Math.min(Math.abs(dx), max + 24);
     sw.head.style.transition = "none";
     sw.head.style.transform = `translateX(${x}px)`;
+    reveal(sw, x, false);
   }
 
   function endSwipe(dx) {
@@ -322,21 +338,21 @@ export function attachGestures(root, hooks) {
     sw = null;
     if (!s) return;
     const open = Math.abs(dx) > SWIPE_OPEN;
-    const to = open ? (dx > 0 ? s.width.left : -s.width.right) : 0;
+    const to = open ? (dx > 0 ? s.width.left + SWIPE_GAP : -(s.width.right + SWIPE_GAP)) : 0;
     s.head.style.transition = "";
     s.head.style.transform = to ? `translateX(${to}px)` : "";
+    reveal(s, to, true);
     const close = () => {
       s.head.style.transform = "";
+      reveal(s, 0, true);
       setTimeout(() => {
         s.left.remove();
         s.right.remove();
         s.node.classList.remove("swiping");
-      }, 180);
+      }, 200);
       if (openSwipe?.node === s.node) openSwipe = null;
     };
     if (open) {
-      // Only the side that was swiped to is shown.
-      (dx > 0 ? s.right : s.left).style.visibility = "hidden";
       openSwipe = { node: s.node, close };
       const sc = root.closest(".pane-scroll");
       sc?.addEventListener("scroll", close, { once: true });
