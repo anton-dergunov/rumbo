@@ -7,5 +7,8 @@
   "scripts": {
     "test": "node --test \"tests/*.test.mjs\"",
     "build": "node tools/build.mjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.8"
   }
 }

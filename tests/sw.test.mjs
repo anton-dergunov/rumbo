@@ -79,7 +79,7 @@ test("activate removes old Rumbo caches and leaves others alone", async () => {
 test("the shell is served from the cache, pages by their directory URL", async () => {
   const w = loadWorker();
   await w.fire("install");
-  assert.equal(await (await w.get(`${SCOPE}check.js`)).text(), `body of ${SCOPE}check.js`);
+  assert.equal(await (await w.get(`${SCOPE}app.js`)).text(), `body of ${SCOPE}app.js`);
   for (const url of [SCOPE, `${SCOPE}index.html`, `${SCOPE}?view=agenda`]) {
     assert.equal(await (await w.get(url, "navigate")).text(), `body of ${SCOPE}`, url);
   }
@@ -98,7 +98,7 @@ test("the GitHub API, other paths on the host, and non-GET requests are not inte
   await w.fire("install");
   assert.equal(await w.get("https://api.github.com/repos/me/notes/git/ref/heads/main"), null);
   assert.equal(await w.get("https://me.github.io/other-project/"), null);
-  assert.equal(await w.fire("fetch", { request: { url: `${SCOPE}check.js`, method: "POST", mode: "cors" } }), null);
+  assert.equal(await w.fire("fetch", { request: { url: `${SCOPE}app.js`, method: "POST", mode: "cors" } }), null);
 });
 
 test("a new version waits until the page asks for it", async () => {

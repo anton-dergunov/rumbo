@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data: blob:; style-src 'self'; font-src 'self'; script-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
-    <title>Rumbo · Device check</title>
-    <meta name="description" content="Checks that this device can run Rumbo: offline storage, the service worker, and the GitHub API." />
+    <title>Rumbo</title>
+    <meta name="description" content="A calm planner for an Org-mode vault." />
     <meta name="theme-color" content="#f4efe5" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -17,88 +17,12 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="fonts/fonts.css" />
     <link rel="stylesheet" href="tokens.css" />
-    <link rel="stylesheet" href="check.css" />
-    <script type="module" src="check.js"></script>
+    <link rel="stylesheet" href="app.css" />
+    <script type="module" src="app.js"></script>
   </head>
   <body>
-    <main>
-      <header>
-        <h1>Rumbo <span class="muted">device check</span></h1>
-        <p class="muted" id="build">…</p>
-        <p id="update" hidden><button type="button" id="apply-update">Update Rumbo</button> <span class="muted">A newer version has downloaded.</span></p>
-      </header>
-
-      <section>
-        <h2>How to use this page</h2>
-        <ol>
-          <li>Add it to the Home Screen (iPad: Share → Add to Home Screen; Android: ⋮ → Add to Home screen / Install) and open it from there.</li>
-          <li>Fill in the repos and the token, then <b>Save and run the checks</b>.</li>
-          <li>Close the app fully (swipe it out of the app switcher, or it only resumes and no open is recorded), turn on Airplane mode with Wi-Fi off, and open it again from the Home Screen: it should load from the service worker, and the list of opens should say "offline" or "GitHub unreachable" (Android may still say "online"). Copy the report after this step.</li>
-          <li>Try the Obsidian link twice: once with Obsidian closed, once with it open. Note what happened.</li>
-          <li><b>Copy the report</b> and paste it into <code>docs/plans/NEXT.md</code>. The report holds no vault text or file names.</li>
-        </ol>
-      </section>
-
-      <section>
-        <h2>Setup</h2>
-        <form id="setup" autocomplete="off">
-          <label>Vault repo <input name="vaultRepo" placeholder="owner/repo" spellcheck="false" autocapitalize="off" /></label>
-          <label>Branch <input name="branch" placeholder="main" spellcheck="false" autocapitalize="off" /></label>
-          <label>Notes repo (Obsidian) <input name="notesRepo" placeholder="owner/repo" spellcheck="false" autocapitalize="off" /></label>
-          <label>Token <input name="token" type="password" placeholder="github_pat_…" spellcheck="false" autocapitalize="off" /></label>
-          <label>Token expires on <input name="tokenExpiry" type="date" /></label>
-          <label class="tick"><input name="tokenNoExpiry" type="checkbox" /> The token has no expiry</label>
-          <label>Obsidian vault name <input name="obsidianVault" placeholder="obsidian" spellcheck="false" autocapitalize="off" /></label>
-          <label>A note to open <input name="noteName" placeholder="A note's name, without .md" spellcheck="false" autocapitalize="off" /></label>
-          <p class="row">
-            <button type="submit">Save and run the checks</button>
-            <button type="button" id="forget" class="quiet">Forget the token</button>
-          </p>
-        </form>
-      </section>
-
-      <section>
-        <h2>Checks</h2>
-        <ul id="checks" class="checks"></ul>
-      </section>
-
-      <section>
-        <h2>Obsidian link</h2>
-        <p><a id="obsidian-link" href="#">Open the note in Obsidian</a></p>
-        <label>With Obsidian closed it
-          <select name="obsidianCold" class="manual">
-            <option value="">— not tried —</option>
-            <option>opened the right note</option>
-            <option>opened another note</option>
-            <option>only opened Obsidian</option>
-            <option>did nothing</option>
-          </select>
-        </label>
-        <label>With Obsidian open it
-          <select name="obsidianWarm" class="manual">
-            <option value="">— not tried —</option>
-            <option>opened the right note</option>
-            <option>opened another note</option>
-            <option>only opened Obsidian</option>
-            <option>did nothing</option>
-          </select>
-        </label>
-      </section>
-
-      <section>
-        <h2>Opens of this page</h2>
-        <ul id="opens" class="checks"></ul>
-      </section>
-
-      <section>
-        <h2>Report</h2>
-        <p class="row">
-          <button type="button" id="copy">Copy the report</button>
-          <span id="copied" class="muted"></span>
-        </p>
-        <textarea id="report" readonly rows="14"></textarea>
-      </section>
-    </main>
+    <div id="stage"><div id="viewport"></div></div>
   </body>
 </html>

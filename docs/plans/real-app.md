@@ -61,7 +61,7 @@ Sibling projects are cited by name (`agentic-org-planner/â€¦`, `calorie-logger/â
 | node-diff3 | 3-way merge of a file | MIT |
 | fflate | The "download everything" zip | MIT |
 
-- Fonts and Material Symbols are self-hosted. Today they load from Google Fonts, which an offline app can't rely on.
+- Fonts and Material Symbols are self-hosted in `app/fonts/`, from their npm packages (Fontsource, `material-symbols`), with their licences beside them. The prototype still loads them from Google Fonts.
 
 ### Device testing needs HTTPS
 Service workers, `crypto.subtle` (for blob SHAs) and `navigator.storage.persist()` exist only in a secure context. `http://<laptop-ip>` from the iPad doesn't count. Use `tailscale serve --https=443` (as lectern does) or a Pages deploy.
@@ -466,7 +466,7 @@ iOS details to carry over from calorie-logger and lectern:
    - Setup, the service worker, the deploy workflow;
    - the read side of the Sync page.
 
-   Usable every day from here on.
+   (The owner starts using Rumbo only when every step is done, so the steps in between stay lean.)
 3. **Blank lines:** the gap model in `org-edit.js`, serialisable ops, invariants, `spacing-report.mjs` and `vault-check.mjs`, with the property tests. The owner reviews the spacing report.
 4. **The write path:** the fake GitHub and the scenario suite first, then:
    - local commits and push;

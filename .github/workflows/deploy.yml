@@ -28,8 +28,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Install the test-only dependencies (fake-indexeddb)
+        run: npm ci
       - name: Check the syntax of every app module
-        run: git ls-files 'app/*.js' | xargs -n1 node --check
+        run: git ls-files 'app/*.js' 'app/**/*.js' | xargs -n1 node --check
       - run: node --test "tests/*.test.mjs"
       - run: python -m unittest discover tests
       - run: node tools/build.mjs

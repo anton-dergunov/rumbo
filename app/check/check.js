@@ -2,10 +2,10 @@
 // assumptions the app is built on, using the app's own modules. It shows counts, SHAs and
 // timings only, never vault text or file names, so the report can be pasted anywhere.
 
-import { startPwa, onStatus, applyUpdate } from "./pwa.js";
-import { createRemote } from "./remote-github.js";
-import { blobSha, bytesToText } from "./gitobj.js";
-import { isIncluded, SUPPORT_FILES } from "./vault-files.js";
+import { startPwa, onStatus, applyUpdate } from "../pwa.js";
+import { createRemote } from "../remote-github.js";
+import { blobSha, bytesToText } from "../gitobj.js";
+import { isIncluded, SUPPORT_FILES } from "../vault-files.js";
 
 const $ = (sel) => document.querySelector(sel);
 

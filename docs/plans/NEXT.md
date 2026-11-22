@@ -5,20 +5,25 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 2. does its scope, with tests;
 3. updates this file before it ends: ticks its row, fills in its hand-off (what was done, decisions, what is left), and leaves the next session's notes.
 
+**The owner won't use Rumbo until every session here is done** (said 2026-11-22). A step in between doesn't need to be usable day to day: build the lean version that the next session can build on, keep the tests, and spend nothing on polish or interim conveniences.
+
 ## Sessions
 
 | # | Plan step | Scope | Read in `real-app.md` | Status |
 |---|---|---|---|---|
 | 1 | 0, 1 | Rename in the docs, history check, build, service worker, deploy workflow, `gitobj.js`, `remote-github.js` (read side), `vault-files.js`, device-check page | §1, §2, §3 (Remote, Auth, Git objects, Which files), §10 | **done** |
-| — | owner | Commit, create the repo, Pages, token, device checks, folder rename (below) | — | **in progress**: device checks left |
-| 2 | 2 | The app, read-only and offline (below) | §2, §3 (replica, Pull, engine), §4 (read side), §9 | next |
-| 3 | 3 | Blank lines: the gap model in `org-edit.js`, `applyOp` and serialisable ops, invariants, `tools/spacing-report.mjs`, `tools/vault-check.mjs`, property tests. The owner then reviews the spacing report. Independent of session 2; the two can swap. | §5, §8 (Blank lines) | |
-| 4 | 4a | `tests/fake-github.mjs` and the scenario harness (the Emacs actor, a second replica), then local commits (folding edits 3 s apart), push, the lost-response and interrupted-sync cases | §3 (Commit and push, engine, edge cases), §8 (fake, scenarios) | needs 3 |
+| — | owner | Commit, create the repo, Pages, token, device checks, folder rename (below) | — | **done** |
+| 2 | 2 | The app, read-only and offline (below) | §2, §3 (replica, Pull, engine), §4 (read side), §9 | **done** |
+| 3 | 3 | Blank lines: the gap model in `org-edit.js`, `applyOp` and serialisable ops, invariants, `tools/spacing-report.mjs`, `tools/vault-check.mjs`, property tests. The owner then reviews the spacing report. Independent of session 2; the two can swap. | §5, §8 (Blank lines) | next |
+| 4 | 4a | `tests/fake-github.mjs` (its write side; session 2 made the read side) and the scenario harness (the Emacs actor, a second replica), then local commits (folding edits 3 s apart), push, the lost-response and interrupted-sync cases | §3 (Commit and push, engine, edge cases), §8 (fake, scenarios) | needs 3 |
 | 5 | 4b | Rebase (replay, then node-diff3), the conflict screen, rescue branch, reset, the zip, seeded random interleavings, `tools/e2e-github.mjs` | §3 (rebase), §4, §8 | needs 4 |
 | 6 | 5 | Obsidian notes: `notes.js`, carrel's Markdown module, wiki links, embeds, footnotes | §6 | |
 | 7 | 6 | Task icons (a session in `agentic-org-planner`), then hardening on the devices | §7, §9 (iOS details) | |
 
-### Session 2 in more detail
+## Later (after the sessions above)
+- **Sync details from Settings** (the owner, 2026-11-22): a way from Settings to fuller sync statistics. The Sync page is reachable from Settings already; this would add more (merge commits counted, rate-limit use, pull timings, history per file).
+
+### Session 2 in more detail (done)
 - `app/` becomes the real app: copy the prototype modules (`org.js`, `inline.js`, `workspace.js`, `org-edit.js`, `edits.js`, `data.js`, the UI modules, the CSS), drop the harness, keep `prototype/` as it is.
 - Move the device check to `app/check/` (it becomes Diagnostics) and keep it working; the app takes `index.html`.
 - `store.js`: the `rumbo` IndexedDB of §3 (meta, files, pending, settings, log), one transaction per change, the 2 s guard (the check page has a small version of it in `check.js`). Tests on `fake-indexeddb`, added as a devDependency (`npm install` then needed for those tests; CI runs `npm ci`).
@@ -45,8 +50,8 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 4. ~~**Make the token**~~ Done (the vault repo with *Contents: read and write*, the Obsidian repo with *Contents: read-only*). It has no expiry: tick "The token has no expiry" on the check page on each device.
 5. **Finish the device check**, each **from the Home Screen** (the Home Screen app has its own storage, so set it up there), then add the reports under "Device reports" below. What is left:
    - ~~**Android phone:**~~ Done (the offline reopen, 18:47–18:48: served by the service worker, GitHub unreachable).
-   - **iPad 11":** the network checks. The report has no vault lines at all, so the checks didn't run in the open it was copied from (the offline one). Go back online in the Home Screen app, make sure the repos and the token are filled in there, tap Run, and copy the report again.
-   - **iPad mini:** the whole check.
+   - ~~**iPad 11":**~~ Done: the owner ran the network checks (the report wasn't pasted).
+   - ~~**iPad mini:**~~ Taken as passing: it is an iPad mini 6 on the same iOS as the iPad 11"; only the screen differs (744×1133).
 6. **Rename the folder** (after the last session in the old folder ends):
    ```sh
    mv ~/projects/products/plan-viewer ~/projects/products/rumbo
@@ -54,6 +59,32 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
    ```
 
 ## Hand-off
+
+### Session 2 (2026-11-22)
+**Done**
+- `app/` is the app. The prototype modules were copied in without the harness, and `prototype/` is unchanged. The device check moved to `app/check/` (Diagnostics, linked from Settings) and keeps its own `rumbo-check` database.
+- `store.js`, `sync.js` (pull and the engine), `data.js` (`buildModel` from the replica), `setup.js` and `sync-ui.js`, as listed in `CLAUDE.md`. Opening the app paints from IndexedDB, then syncs. The sync mark shows in the header only when not synced: muted when offline or waiting, accent-coloured when the owner is needed.
+- Setup is prefilled from the device check's saved settings, so each device needs no retyping. `persist()` is called after the first pull succeeds.
+- Settings has the theme, tablet nav (rail or drawer, now a setting), Sync, the token line (no expiry, or a warning two weeks ahead), the device name, Diagnostics, the version, and "Update Rumbo" with a dot on the Settings row. The update waits until no sync is running.
+- The last place (view, file, focus by title path, fold, the top row) is saved and restored when the app opens with no query.
+- Fonts are self-hosted in `app/fonts/` (5.5 MB, 4 MB of it Material Symbols, which is kept whole because `workspace.org` may name any icon). The CSP is `'self'` plus `api.github.com`. `h()` sets `style` through the CSSOM.
+- Tests: `store`, `sync` (pull against the fake and the engine with fake timers), `data`, and more build checks (CSP, no `style=`, fonts and `check/` precached). 81 pass with `npm install`; without it the 14 IndexedDB tests skip. CI runs `npm ci`.
+- `tests/fake-github.mjs`, read side: git-hashed blobs, trees and commits, ETag and a free 304, `compare`, the commit list, injected failures. `push()` and `forcePush()` act as another writer.
+- Checked in a browser against the fake, served under `/rumbo/`. In Chromium: Setup → first pull → agenda; the place restored; an upstream commit picked up on focus; an offline reopen paints from the replica with the offline mark, which clears when back online; the Sync page; Diagnostics. In WebKit: screenshots at the three sizes, with no console errors.
+
+**Findings and decisions**
+- Editing works on the page only, with a toast that says it isn't saved (the model is never `writable`); the swipe variant isn't on yet. Session 4 joins swipe and edit mode and writes local commits.
+- A pull is refused at the store while `pending` has commits, so session 4 must rebase before applying a pull.
+- A `behind` compare (the branch reset to an older commit) is treated as `diverged`. A base that GitHub no longer knows (404 on compare) is too.
+- Not-UTF-8 files are kept (decoded with replacement) and marked read-only, as are CR files.
+- "Reset to GitHub" exists for `diverged` and is refused while anything is pending. The rescue branch and the zip are session 5.
+- Testing notes: Playwright can't fulfil a 304 through a route, so the scratch test asked unconditionally. WebKit's routes don't see requests from a page controlled by the service worker, so WebKit runs need `service_workers="block"`. WebKit logs "Refused to apply a stylesheet" for Playwright's own screenshot style; that message is not the app's.
+- On the devices: the old worker keeps serving the check page until "Update Rumbo" is tapped there; then the app opens to a prefilled Setup.
+
+**Left for later sessions**
+- Session 3 can start straight away. It works in `app/org-edit.js` (the copy), leaving `prototype/org-edit.js` alone. The tests in `tests/org*.test.mjs` import from `prototype/`: point them at `app/`, and keep a prototype run only if the prototype is to stay in step.
+- Session 4: `edits.js` still has the prototype's `save()` and `/api/save`, which are never reached. Replace them with local commits through `store.js`, and set `writable` in `data.js`.
+- The Obsidian repo and vault name are stored at Setup (`settings` → `obsidian`) for session 6.
 
 ### Session 1 (2026-11-22)
 **Done**
@@ -78,8 +109,8 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 
 **Summary (2026-11-22)**
 - **Android phone** (Chrome 157, Android 10): every check passes from the Home Screen. Head in 0.9 s, a 304 on an unchanged head, rate-limit headers readable, all 36 files (35 agenda files plus `workspace.org`, 1 MB) in 3.8 s with no SHA mismatches, no CR line endings and no non-UTF-8 files, and 1,359 Obsidian notes indexed in 2.6 s. The Obsidian link opens the right note, cold and warm. The offline reopen works too (second report): with every radio off, four opens from the Home Screen were served by the service worker and GitHub could not be reached. **But Chrome still reported `navigator.onLine` as true**, so each open was logged as "online". The check page now also records whether each open reached GitHub.
-- **iPad 11"** (Safari 26.6.1): the service worker, IndexedDB, persistent storage (38 GB quota), the offline reopen (`OFFLINE sw home-screen`) and the Obsidian link all pass. Still to do: the network checks.
-- **iPad mini:** not run yet.
+- **iPad 11"** (Safari 26.6.1): the service worker, IndexedDB, persistent storage (38 GB quota), the offline reopen (`OFFLINE sw home-screen`) and the Obsidian link all pass. The network checks were run later and passed (report not pasted).
+- **iPad mini 6:** not run separately; the same iOS and Safari as the iPad 11".
 - `.ps/task-icons.json missing` is expected: Emacs starts writing it in session 7 (§7).
 - **Real sizes:** the iPad 11" is 820×1180 (820×1148 from the Home Screen), not 834×1210 (that is the iPad Pro 11"). The phone is 393×851 (392×790 from the Home Screen), not 412×915. `CLAUDE.md`'s screenshot sizes are updated to match. The prototype's `frame` presets keep the old sizes.
 

@@ -81,7 +81,7 @@ test("the cache name follows the files: same source, same name; any change, a ne
 
   const src = mkdtempSync(join(tmpdir(), "rumbo-src-"));
   cpSync(app, src, { recursive: true });
-  appendFileSync(join(src, "check.css"), "\n/* changed */\n");
+  appendFileSync(join(src, "app.css"), "\n/* changed */\n");
   const changed = freshBuild(src);
   assert.notEqual(changed.cache, a.cache);
   rmSync(src, { recursive: true, force: true });
@@ -97,4 +97,32 @@ test("the unbuilt worker is valid and precaches nothing", () => {
   writeFileSync(join(src, "sw.js"), sw.replace(/ \/\/ BUILD:\w+/g, ""));
   assert.throws(() => freshBuild(src), /BUILD lines/);
   rmSync(src, { recursive: true, force: true });
+});
+
+test("the Diagnostics page lives at check/, and the self-hosted fonts are precached", () => {
+  const b = freshBuild();
+  const precache = precacheOf(b.read("sw.js"));
+  assert.ok(precache.includes("check/"));
+  assert.ok(precache.includes("fonts/fonts.css"));
+  assert.ok(precache.includes("fonts/material-symbols-outlined.woff2"));
+  for (const m of b.read("fonts/fonts.css").matchAll(/url\(([^)]+)\)/g)) assert.ok(b.files.includes(`fonts/${m[1]}`), m[1]);
+  assert.match(b.read("check/index.html"), /href="\.\.\/manifest\.webmanifest"/);
+});
+
+test("every page's CSP allows only itself and api.github.com, and no HTML uses style attributes", () => {
+  const b = freshBuild();
+  const pages = b.files.filter((f) => f.endsWith(".html"));
+  assert.deepEqual(pages.sort(), ["check/index.html", "index.html"]);
+  for (const f of pages) {
+    const html = b.read(f);
+    const csp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1];
+    assert.ok(csp, `${f}: no CSP`);
+    const hosts = csp.match(/https?:\/\/[^\s;]+/g) || [];
+    assert.deepEqual([...new Set(hosts)], ["https://api.github.com"], `${f}: ${hosts}`);
+    assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval/, f);
+    assert.match(csp, /style-src 'self'/, f);
+    assert.doesNotMatch(html, /\sstyle="/, `${f}: style attribute`);
+    assert.doesNotMatch(html, /fonts\.googleapis|fonts\.gstatic/, f);
+  }
+  for (const f of b.files.filter((f) => f.endsWith(".js"))) assert.doesNotMatch(b.read(f), /setAttribute\(\s*["']style["']/, `${f}: style attribute set from script`);
 });
