@@ -14,8 +14,14 @@
 // Headings are written the way Emacs writes them in this vault: `** TODO [#A] Title :a:b:`, the
 // tags one space after the title with no column alignment (org-auto-align-tags nil), the planning
 // line directly under the heading, and no CLOSED line (org-log-done nil).
+//
+// Edits inside an entry (its heading line, planning line or notes) never touch a blank line around
+// it. Insert, delete and move resolve only the seams they create, with the Emacs blank-line model
+// (see "subtrees and seams" below). They take the parsed doc and a `ctx` of {rule, memory}
+// (spacing.js). ops.js runs all of them from serialisable ops and checks the result.
 
 import { ALL_STATES, parseHeadingLine, parseOrg } from "./org.js";
+import { partition, nodeIdentity, identity, cellOf, predict, ambiguous, recall, START } from "./spacing.js";
 
 const HEAD_RE = /^(\*+)([ \t]+)(.*)$/;
 const TAGS_RE = /([ \t]+)(:(?:[\w@#%]+:)+)([ \t]*)$/;
@@ -264,98 +270,167 @@ export function setBody(lines, hd, text) {
   return finish(t, lines.length, hd.line);
 }
 
-// ---------------------------------------------------------------- subtrees
+// ---------------------------------------------------------------- subtrees and seams
+//
+// Insert, delete and move follow the Emacs ownership model (spacing.js, real-app.md §5). The file is
+// read as a sequence of headings, each a block (its heading line, its lead and its body, all kept as
+// they are), with a blank run between neighbours. An edit cuts blocks out and puts blocks in; a run
+// between two headings that were neighbours before stays exactly as it was. Only the seams the edit
+// creates are resolved, first rule that applies:
+//   - the same two headings were neighbours before: their old run;
+//   - the next heading is deeper than a heading with no body: that heading's own lead;
+//   - the edge memory (`ctx.memory`, from earlier versions) knows the two neighbours: that run;
+//   - the rule cell (`ctx.rule`, counted from the vault; null means the built-in default): its count;
+//   - keep the run that was at that spot.
+// The blank lines at the start and the end of the file never move.
 
-/** The subtree's own lines, without the blank run at its end when that run is the separator before what follows. */
-function subtreeContentEnd(lines, hd) {
-  let e = hd.end;
-  while (e > hd.line + 1 && isBlank(lines[e - 1])) e--;
-  return e;
+const blankLine = () => ({ t: "", src: -1 });
+const runLines = (r) => (r.fixed ? r.lines : r.keep);
+const longer = (a, b) => (b.length > a.length ? b : a);
+
+/** The file as a sequence of blocks and runs. `freshLines`: the lines come from elsewhere (a chunk from another file). */
+function sequence(lines, doc, { freshLines = false } = {}) {
+  const part = partition(doc, lines);
+  const t = freshLines ? fresh(lines) : tagged(lines);
+  const sl = (r) => t.slice(r[0], r[1]);
+  const start = { start: true };
+  const nodes = part.nodes.map((nd, k) => ({
+    h: nd.h,
+    level: nd.level,
+    hasBody: nd.hasBody,
+    id: nodeIdentity(nd, lines),
+    block: [t[nd.head], ...sl(nd.lead), ...sl(nd.body)],
+    // With no body, the run after the heading is its lead when the next heading is deeper.
+    hadLead: part.kinds[k + 1] === "lead",
+    leadRun: part.kinds[k + 1] === "lead" ? sl(part.runs[k + 1]) : [],
+    origRun: sl(part.runs[k]),
+    origPrev: null,
+  }));
+  nodes.forEach((nd, k) => (nd.origPrev = k ? nodes[k - 1] : start));
+  return {
+    start,
+    head: [...sl(part.bof), ...sl(part.pre)],
+    hasPre: part.pre[1] > part.pre[0],
+    nodes,
+    runs: part.runs.map((r) => ({ fixed: true, lines: sl(r) })),
+  };
 }
 
-/**
- * The span to remove when a subtree goes away. An entry owns the blank lines after it, so normally
- * the whole subtree goes, those blank lines included. Two cases keep the spacing of what remains:
- * - the line before it is not blank: its trailing blank run is then the only separator between the
- *   entry before and whatever follows, so it stays;
- * - it is the last thing in the file with no blank lines after it: the blank run before it would be
- *   left dangling at the end of the file, so that goes with it.
- */
-function removalSpan(lines, hd) {
-  const prevBlank = hd.line > 0 && isBlank(lines[hd.line - 1]);
-  const cEnd = subtreeContentEnd(lines, hd);
-  if (!prevBlank && hd.line > 0) return { start: hd.line, end: cEnd };
-  if (prevBlank && hd.end === lines.length && cEnd === hd.end) {
-    let s = hd.line;
-    while (s > 0 && isBlank(lines[s - 1])) s--;
-    return { start: s, end: hd.end };
+function indexOf(S, hd) {
+  const k = S.nodes.findIndex((n) => n.h === hd);
+  if (k < 0) throw new Error("that heading is not in this file");
+  return k;
+}
+
+/** The index of the last heading in node k's subtree. */
+function subtreeLast(S, k) {
+  let j = k;
+  while (j + 1 < S.nodes.length && S.nodes[j + 1].level > S.nodes[k].level) j++;
+  return j;
+}
+
+/** Take nodes i..j out. The two runs around them become one seam, or eof stays when they were last. */
+function cut(S, i, j) {
+  const N = S.nodes.length;
+  const taken = { nodes: S.nodes.slice(i, j + 1), inner: S.runs.slice(i + 1, j + 1) };
+  const merged = j + 1 === N ? S.runs[N] : { fixed: false, keep: longer(runLines(S.runs[i]), runLines(S.runs[j + 1])) };
+  S.nodes.splice(i, j - i + 1);
+  S.runs.splice(i, j - i + 2, merged);
+  return taken;
+}
+
+/** Put nodes in at index k. Both new seams may keep the run that was there; eof stays. */
+function insertAt(S, k, taken) {
+  const N = S.nodes.length;
+  const r = S.runs[k];
+  const keep = runLines(r);
+  const seam = () => ({ fixed: false, keep });
+  // With no headings yet, the preamble's trailing blank lines become the seam before the new one.
+  const tail = N === 0 ? { fixed: true, lines: [] } : k === N ? r : seam();
+  S.nodes.splice(k, 0, ...taken.nodes);
+  S.runs.splice(k, 1, seam(), ...taken.inner, tail);
+}
+
+function relevelNodes(nodes, delta) {
+  if (!delta) return;
+  for (const n of nodes) {
+    n.level = Math.max(1, n.level + delta);
+    const head = n.block[0];
+    n.block[0] = { t: head.t.replace(/^\*+/, "*".repeat(n.level)), src: head.src };
   }
-  return { start: hd.line, end: hd.end };
 }
 
-/** Does the heading at `level` just before p sit after a blank line? Then entries here are spaced out. */
-function spacedBefore(t, p, level) {
-  for (let i = p - 1; i >= 0; i--) {
-    const hd = /^(\*+)[ \t]/.exec(t[i].t);
-    if (!hd || !parseHeadingLine(t[i].t)) continue;
-    if (hd[1].length < level) return false;
-    if (hd[1].length === level) return i > 0 && isBlank(t[i - 1].t);
+function resolveSeam(S, p, s, r, ctx, twice) {
+  if (s.origPrev === p) return s.origRun;
+  const first = p === S.start;
+  const remembered = () => {
+    const pid = first ? START : p.id;
+    const m = twice.has(s.id) || twice.has(pid) ? null : recall(ctx.memory, pid, s.id);
+    return m ? fresh(m) : null;
+  };
+  if (first) {
+    if (!S.hasPre) return [];
+  } else if (!p.hasBody && s.level > p.level) {
+    // The heading's own lead. One that lost it (its only child went) gets it back from the memory.
+    return p.hadLead ? p.leadRun : remembered() || [];
   }
-  return false;
+  const m = remembered();
+  if (m) return m;
+  const v = predict(ctx.rule ?? null, cellOf(s.level, first ? null : p));
+  if (v != null) return Array.from({ length: v }, blankLine);
+  return r.keep;
 }
 
-/**
- * Insert `chunk` (an entry at `level`) at p in tagged lines, copying the spacing there. A blank line
- * before p means entries end with one, so the new entry gets one too, unless it is last in the file.
- * Directly after a sibling that is itself spaced out, the blank goes before the new entry instead.
- */
-function insertChunk(t, p, chunk, level) {
-  let add = chunk;
-  if (p > 0 && isBlank(t[p - 1].t)) {
-    if (p < t.length) add = [...chunk, { t: "", src: -1 }];
-  } else if (p > 0 && spacedBefore(t, p, level)) {
-    add = [{ t: "", src: -1 }, ...chunk];
-    t.splice(p, 0, ...add);
-    return p + 1;
-  }
-  t.splice(p, 0, ...add);
-  return p;
-}
-
-function relevel(chunkLines, delta) {
-  if (!delta) return chunkLines;
-  return chunkLines.map((x) => {
-    const m = /^(\*+)([ \t].*)?$/.exec(x.t);
-    if (!m || !parseHeadingLine(x.t)) return x;
-    return { t: "*".repeat(Math.max(1, m[1].length + delta)) + (m[2] || ""), src: x.src };
+/** The sequence back into lines. `focus` is a node whose heading line index becomes `at`. */
+function assemble(S, ctx, oldLength, focus = null) {
+  const out = [];
+  const used = new Set();
+  const push = (x) => {
+    if (x.src >= 0) {
+      if (used.has(x.src)) x = { t: x.t, src: -1 };
+      else used.add(x.src);
+    }
+    out.push(x);
+  };
+  const twice = ambiguous(S.nodes.map((n) => n.id));
+  S.head.forEach(push);
+  let at = -1;
+  S.nodes.forEach((s, k) => {
+    const r = S.runs[k];
+    const p = k ? S.nodes[k - 1] : S.start;
+    (r.fixed ? r.lines : resolveSeam(S, p, s, r, ctx, twice)).forEach(push);
+    if (s === focus) at = out.length;
+    s.block.forEach(push);
   });
+  runLines(S.runs[S.nodes.length]).forEach(push);
+  return finish(out, oldLength, at);
 }
 
 const within = (hd, other) => other.line >= hd.line && other.line < hd.end;
 
-/** Where a target puts things: {p, level} in the original line numbers. */
-function targetPoint(lines, target) {
-  if (target.before) return { p: target.before.line, level: target.before.level };
-  if (target.after) return { p: target.after.end, level: target.after.level };
-  if (target.into) {
-    const s = target.into;
-    return target.at === "first" ? { p: s.bodyEnd, level: s.level + 1 } : { p: s.end, level: s.level + 1 };
+/** Where a target puts things in S: {k, level}. */
+function targetIndex(S, target) {
+  if (target.before) {
+    const k = indexOf(S, target.before);
+    return { k, level: S.nodes[k].level };
   }
-  if (target.fileEnd) return { p: lines.length, level: target.level || 1 };
-  if (target.fileStart) return { p: target.firstLine ?? 0, level: target.level || 1 };
+  if (target.after) {
+    const k = indexOf(S, target.after);
+    return { k: subtreeLast(S, k) + 1, level: S.nodes[k].level };
+  }
+  if (target.into) {
+    const k = indexOf(S, target.into);
+    return { k: target.at === "first" ? k + 1 : subtreeLast(S, k) + 1, level: S.nodes[k].level + 1 };
+  }
+  if (target.fileEnd) return { k: S.nodes.length, level: target.level || 1 };
+  if (target.fileStart) return { k: 0, level: target.level || 1 };
   throw new Error("bad target");
 }
 
 const targetHeading = (target) => target.before || target.after || target.into || null;
 
-/**
- * Insert a new heading. `where`: "after" (a sibling after ref's subtree), "firstChild", "lastChild",
- * or "end" (end of the file, at fields.level). `fields`: {level?, state, priority, title, tags,
- * scheduled, deadline, body}.
- */
-export function insertHeading(lines, ref, where, fields) {
-  const target = where === "after" ? { after: ref } : where === "firstChild" ? { into: ref, at: "first" } : where === "lastChild" ? { into: ref, at: "last" } : { fileEnd: true, level: fields.level || 1 };
-  const { p, level } = targetPoint(lines, target);
+/** A new heading's lines: the heading, the planning line, the notes. */
+function newHeadingLines(fields, level) {
   const out = [formatHeadingLine({ ...fields, level })];
   const planning = [];
   if (fields.deadline) planning.push(`DEADLINE: ${orgStamp(fields.deadline)}`);
@@ -364,61 +439,79 @@ export function insertHeading(lines, ref, where, fields) {
   if (fields.body) {
     const body = String(fields.body).replace(/\r\n?/g, "\n").split("\n");
     while (body.length && isBlank(body[body.length - 1])) body.pop();
+    while (body.length && isBlank(body[0])) body.shift();
     if (bodyProblems(body.join("\n")).length) throw new Error("A line in the notes starts with '* ', which Org reads as a new heading.");
     out.push(...body);
   }
-  const t = tagged(lines);
-  const at = insertChunk(t, p, fresh(out), level);
-  return finish(t, lines.length, at);
+  return out;
+}
+
+/**
+ * Insert a new heading. `where`: "after" (a sibling after ref's subtree), "firstChild", "lastChild",
+ * or "end" (end of the file, at fields.level). `fields`: {level?, state, priority, title, tags,
+ * scheduled, deadline, body}.
+ */
+export function insertHeading(lines, doc, ref, where, fields, ctx = {}) {
+  const S = sequence(lines, doc);
+  const target = !ref || where === "end" ? { fileEnd: true, level: fields.level || 1 } : where === "after" ? { after: ref } : { into: ref, at: where === "firstChild" ? "first" : "last" };
+  const { k, level } = targetIndex(S, target);
+  const out = newHeadingLines(fields, level);
+  const node = { h: null, level, hasBody: out.length > 1, id: identity(cleanTitle(fields.title || ""), out.slice(1)), block: fresh(out), hadLead: false, leadRun: [], origRun: [], origPrev: null };
+  insertAt(S, k, { nodes: [node], inner: [] });
+  return assemble(S, ctx, lines.length, node);
 }
 
 /** Remove a heading and everything under it. */
-export function deleteSubtree(lines, hd) {
-  const { start, end } = removalSpan(lines, hd);
-  const t = tagged(lines);
-  t.splice(start, end - start);
-  return finish(t, lines.length, -1);
+export function deleteSubtree(lines, doc, hd, ctx = {}) {
+  const S = sequence(lines, doc);
+  const k = indexOf(S, hd);
+  cut(S, k, subtreeLast(S, k));
+  return assemble(S, ctx, lines.length);
+}
+
+/** The outermost DONE headings in `scope` (a heading, or null for the whole file). */
+export function doneIn(doc, scope = null) {
+  const pool = scope ? doc.headings.filter((x) => within(scope, x) && x !== scope) : doc.headings;
+  return pool.filter((x) => x.state === "DONE" && !x.path.some((a) => a.state === "DONE" && pool.includes(a)));
 }
 
 /** Remove every DONE task in `scope` (a heading, or null for the whole file) in one edit. */
-export function removeDone(lines, doc, scope = null) {
-  const pool = scope ? doc.headings.filter((x) => within(scope, x) && x !== scope) : doc.headings;
-  const outer = pool.filter((x) => x.state === "DONE" && !x.path.some((a) => a.state === "DONE" && pool.includes(a)));
-  const t = tagged(lines);
+export function removeDone(lines, doc, scope = null, ctx = {}) {
+  const outer = doneIn(doc, scope);
+  const S = sequence(lines, doc);
   for (const hd of [...outer].sort((a, b) => b.line - a.line)) {
-    const { start, end } = removalSpan(lines, hd);
-    t.splice(start, end - start);
+    const k = indexOf(S, hd);
+    cut(S, k, subtreeLast(S, k));
   }
-  return { ...finish(t, lines.length, scope ? scope.line : -1), removed: outer.length };
+  const focus = scope ? S.nodes.find((n) => n.h === scope) : null;
+  return { ...assemble(S, ctx, lines.length, focus), removed: outer.length };
 }
 
 /**
  * Move a subtree inside its file. target: {before: heading} | {after: heading} |
  * {into: section, at: "first" | "last"} | {fileEnd: true, level}. The moved headings change only their
- * stars; their text and the text around both places stays as it was.
+ * stars; their text, their leads and the runs inside them stay as they were.
  */
-export function moveSubtree(lines, hd, target) {
+export function moveSubtree(lines, doc, hd, target, ctx = {}) {
   const th = targetHeading(target);
   if (th && within(hd, th)) throw new Error("cannot move a section into itself");
-  const { p: p0, level } = targetPoint(lines, target);
-  const { start, end } = removalSpan(lines, hd);
-  const cEnd = subtreeContentEnd(lines, hd);
-  const t = tagged(lines);
-  const chunk = relevel(t.slice(hd.line, cEnd), level - hd.level);
-  t.splice(start, end - start);
-  let p = p0;
-  if (p0 >= end) p -= end - start;
-  else if (p0 > start) p = start;
-  const at = insertChunk(t, p, chunk, level);
-  return finish(t, lines.length, at);
+  const S = sequence(lines, doc);
+  const k = indexOf(S, hd);
+  const taken = cut(S, k, subtreeLast(S, k));
+  const { k: to, level } = targetIndex(S, target);
+  relevelNodes(taken.nodes, level - hd.level);
+  insertAt(S, to, taken);
+  return assemble(S, ctx, lines.length, taken.nodes[0]);
 }
 
-/** Change the level of a subtree in place, as org-promote-subtree and org-demote-subtree do. */
+/** Change the level of a subtree in place, as org-promote-subtree and org-demote-subtree do. Its neighbours stay, so every run does too. */
 export function shiftLevel(lines, hd, delta) {
   if (hd.level + delta < 1) throw new Error("already at the top level");
   const t = tagged(lines);
-  const moved = relevel(t.slice(hd.line, hd.end), delta);
-  t.splice(hd.line, moved.length, ...moved);
+  for (let i = hd.line; i < hd.end; i++) {
+    const m = /^(\*+)([ \t].*)?$/.exec(t[i].t);
+    if (m && parseHeadingLine(t[i].t)) t[i] = { t: "*".repeat(Math.max(1, m[1].length + delta)) + (m[2] || ""), src: i };
+  }
   return finish(t, lines.length, hd.line);
 }
 export const promote = (lines, hd) => shiftLevel(lines, hd, -1);
@@ -426,56 +519,45 @@ export const demote = (lines, hd) => shiftLevel(lines, hd, +1);
 
 export const siblingsOf = (doc, hd) => (hd.parent ? hd.parent.children : doc.children);
 
-export function moveUp(lines, doc, hd) {
+export function moveUp(lines, doc, hd, ctx = {}) {
   const sib = siblingsOf(doc, hd);
   const i = sib.indexOf(hd);
   if (i <= 0) return unchanged(lines, hd.line);
-  return moveSubtree(lines, hd, { before: sib[i - 1] });
+  return moveSubtree(lines, doc, hd, { before: sib[i - 1] }, ctx);
 }
 
-export function moveDown(lines, doc, hd) {
+export function moveDown(lines, doc, hd, ctx = {}) {
   const sib = siblingsOf(doc, hd);
   const i = sib.indexOf(hd);
   if (i < 0 || i >= sib.length - 1) return unchanged(lines, hd.line);
-  return moveSubtree(lines, hd, { after: sib[i + 1] });
+  return moveSubtree(lines, doc, hd, { after: sib[i + 1] }, ctx);
 }
 
 /** Take a subtree out of a file, for a move to another file: {lines, map, chunk, level}. */
-export function extractSubtree(lines, hd) {
-  const { start, end } = removalSpan(lines, hd);
-  const chunk = lines.slice(hd.line, subtreeContentEnd(lines, hd));
-  const t = tagged(lines);
-  t.splice(start, end - start);
-  return { ...finish(t, lines.length, -1), chunk, level: hd.level };
+export function extractSubtree(lines, doc, hd, ctx = {}) {
+  const S = sequence(lines, doc);
+  const k = indexOf(S, hd);
+  const taken = cut(S, k, subtreeLast(S, k));
+  const chunk = [];
+  taken.nodes.forEach((n, i) => {
+    if (i) chunk.push(...taken.inner[i - 1].lines.map((x) => x.t));
+    chunk.push(...n.block.map((x) => x.t));
+  });
+  return { ...assemble(S, ctx, lines.length), chunk, level: hd.level };
 }
 
-/** Put a subtree taken from another file at `target` in this one. */
-export function insertSubtree(lines, chunk, fromLevel, target) {
-  const { p, level } = targetPoint(lines, target);
-  const t = tagged(lines);
-  const at = insertChunk(t, p, relevel(fresh(chunk), level - fromLevel), level);
-  return finish(t, lines.length, at);
-}
-
-/**
- * Several edits to one heading as one edit (one undo step, one save): each step is
- * (lines, heading) => result; the heading is found again by line after every step.
- */
-export function chain(lines, hd, steps) {
-  const oldLength = lines.length;
-  let cur = lines;
-  let at = hd.line;
-  let index = Array.from({ length: oldLength }, (_, i) => i);
-  for (const step of steps) {
-    const h = parseOrg(cur.join("\n")).headings.find((x) => x.line === at);
-    if (!h) throw new Error("lost the heading while editing");
-    const r = step(cur, h);
-    index = index.map((n) => (n >= 0 ? r.map(n) : -1));
-    cur = r.lines;
-    at = r.at >= 0 ? r.at : r.map(at);
-  }
-  const map = (old) => (old >= 0 && old < oldLength ? index[old] : -1);
-  return { lines: cur, map, at };
+/** Put a subtree taken from another file (`chunk`, its lines, at `fromLevel`) at `target` in this one. */
+export function insertSubtree(lines, doc, chunk, fromLevel, target, ctx = {}) {
+  const cdoc = parseOrg(chunk.join("\n"));
+  if (!cdoc.headings.length || cdoc.headings[0].line !== 0 || cdoc.headings[0].level !== fromLevel) throw new Error("the moved text does not start with its heading");
+  const C = sequence(chunk, cdoc, { freshLines: true });
+  const taken = { nodes: C.nodes, inner: C.runs.slice(1, C.nodes.length) };
+  for (const n of taken.nodes) n.origPrev = null;
+  const S = sequence(lines, doc);
+  const { k, level } = targetIndex(S, target);
+  relevelNodes(taken.nodes, level - fromLevel);
+  insertAt(S, k, taken);
+  return assemble(S, ctx, lines.length, taken.nodes[0]);
 }
 
 // ---------------------------------------------------------------- finding a heading again

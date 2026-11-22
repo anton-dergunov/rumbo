@@ -1,9 +1,9 @@
-// Applying edits: run a pure edit from org-edit.js on a file's lines, rebuild the model, keep the
+// Applying edits: run ops (ops.js) on a file's lines, rebuild the model, keep the
 // reader's place (fold state, focus, open rows) on the re-parsed headings, record undo, and save.
 //
 // Saving: one save in flight at a time; edits made meanwhile go in the next one. A save sends each
 // file with the version it was read at. If the file changed underneath (409), the edits made since
-// the last save are applied again to the new text, finding each heading by its title path; if any of
+// the last save are applied again to the new text (the journal holds ops, ops.js), finding each heading by its title path; if any of
 // them cannot be placed, the file is reloaded and the owner is told. Only the sample vault's working
 // copy is written; edits to the real vault stay in memory in this prototype.
 //
@@ -11,6 +11,8 @@
 // never reached; plan step 4 replaces it with local commits through store.js.
 
 import { joinLines, headingKey, findHeading } from "./org-edit.js";
+import { applyOps, OpError } from "./ops.js";
+import { edgeMemory, mergeMemory } from "./spacing.js";
 import { parseOrg } from "./org.js";
 import { rebuildFile } from "./data.js";
 import { state, overridesFor } from "./state.js";
@@ -79,32 +81,43 @@ function remapByKey(path, oldDoc, newDoc) {
 
 // ---------------------------------------------------------------- applying
 
+/** The edge memory of a file (spacing.js): its runs as loaded and after every edit here, newest winning. */
+const memories = new Map();
+function ctxFor(file) {
+  if (!memories.has(file.path)) memories.set(file.path, edgeMemory(file.doc));
+  return { rule: model.spacing || null, memory: memories.get(file.path) };
+}
+const remember = (file) => memories.set(file.path, mergeMemory(memories.get(file.path), edgeMemory(file.doc)));
+
+const asList = (x) => (Array.isArray(x) ? x : [x]);
+
+function refusal(err) {
+  if (err instanceof OpError && err.code === "lost") return "The file changed meanwhile; nothing was edited. Try again.";
+  if (err instanceof OpError && err.code === "invariant") return `Not edited: the change would have touched more of the file than it should (${err.message}).`;
+  return err.message;
+}
+
 /**
  * Apply one edit to one file.
  *   path   the file
  *   label  what the toast says, e.g. "Marked done"
- *   refs   {name: heading} the edit is about; they are found again by title path after a conflict
- *   run    (lines, doc, refs) => {lines, map, at} from org-edit.js
+ *   build  (doc) => op or [ops] (ops.js makeOp), made against the file as it is now; a heading from
+ *          before a redraw makes makeOp refuse
  * Returns the heading at `at` in the new parse (the edited or new heading), or null.
  */
-export function edit(path, label, refs, run, { quiet = false } = {}) {
+export function edit(path, label, build, { quiet = false } = {}) {
   const file = model.byPath.get(path);
   const why = readOnlyReason(file);
   if (why) {
     notify({ text: why, kind: "error" });
     return null;
   }
-  // A heading from before a redraw would point at the wrong lines.
-  if (Object.values(refs).some((h) => h && !file.doc.headings.includes(h))) {
-    notify({ text: "The file changed meanwhile; nothing was edited. Try again.", kind: "error" });
-    return null;
-  }
-  const keys = Object.fromEntries(Object.entries(refs).map(([k, h]) => [k, h ? headingKey(file.doc, h) : null]));
-  let result;
+  let ops, result;
   try {
-    result = run(file.doc.lines, file.doc, refs);
+    ops = asList(build(file.doc)).map((op) => ({ ...op, path }));
+    result = applyOps(file.doc.lines, file.doc, ops, ctxFor(file));
   } catch (err) {
-    notify({ text: err.message, kind: "error" });
+    notify({ text: refusal(err), kind: "error" });
     return null;
   }
   const before = file.text;
@@ -112,11 +125,12 @@ export function edit(path, label, refs, run, { quiet = false } = {}) {
   if (after === before) return headingAt(file, result.at);
   const oldDoc = file.doc;
   rebuildFile(model, path, after);
+  remember(file);
   const idMap = remap(path, oldDoc, file.doc, result.map);
   undoStack.push({ label, files: [{ path, before, after }] });
   if (undoStack.length > 20) undoStack.shift();
   if (!journal.has(path)) journal.set(path, []);
-  journal.get(path).push({ keys, run });
+  journal.get(path).push({ ops });
   queueSave([path]);
   if (!quiet) notify({ text: label, kind: "done", action: { label: "Undo", run: undo } });
   redraw(idMap);
@@ -126,40 +140,38 @@ export function edit(path, label, refs, run, { quiet = false } = {}) {
 const headingAt = (file, at) => (at >= 0 ? file.doc.headings.find((h) => h.line === at) || null : null);
 
 /**
- * A move from one file to another, as one edit in both: `take(lines, doc, refs)` returns
- * {lines, map, chunk, level} for the source, `put(lines, doc, refs, chunk, level)` the target's result.
+ * A move from one file to another, as one edit in both: `take(srcDoc)` makes the extractSubtree op,
+ * `put(dstDoc, chunk, level)` the insertSubtree op that carries the taken lines.
  */
-export function editTwo(srcPath, dstPath, label, srcRefs, dstRefs, take, put) {
+export function editTwo(srcPath, dstPath, label, take, put) {
   const src = model.byPath.get(srcPath);
   const dst = model.byPath.get(dstPath);
   for (const f of [src, dst]) {
     const why = readOnlyReason(f);
     if (why) return notify({ text: why, kind: "error" }), null;
   }
-  if (Object.values(srcRefs).some((h) => h && !src.doc.headings.includes(h)) || Object.values(dstRefs).some((h) => h && !dst.doc.headings.includes(h))) {
-    notify({ text: "The file changed meanwhile; nothing was moved. Try again.", kind: "error" });
-    return null;
-  }
-  let a, b;
+  let a, b, opA, opB;
   try {
-    a = take(src.doc.lines, src.doc, srcRefs);
-    b = put(dst.doc.lines, dst.doc, dstRefs, a.chunk, a.level);
+    opA = { ...take(src.doc), path: srcPath };
+    a = applyOps(src.doc.lines, src.doc, [opA], ctxFor(src));
+    opB = { ...put(dst.doc, a.results[0].chunk, a.results[0].level), path: dstPath };
+    b = applyOps(dst.doc.lines, dst.doc, [opB], ctxFor(dst));
   } catch (err) {
-    notify({ text: err.message, kind: "error" });
+    notify({ text: refusal(err), kind: "error" });
     return null;
   }
   const entry = { label, files: [] };
   const idMap = new Map();
-  for (const [f, r] of [[src, a], [dst, b]]) {
+  for (const [f, r, op] of [[src, a, opA], [dst, b, opB]]) {
     const before = f.text;
     const after = joinLines(r.lines, f.doc.finalNewline || !f.doc.lines.length);
     const oldDoc = f.doc;
     rebuildFile(model, f.path, after);
+    remember(f);
     for (const [k, v] of remap(f.path, oldDoc, f.doc, r.map)) idMap.set(k, v);
     entry.files.push({ path: f.path, before, after });
-    // A move between files cannot be re-applied after a conflict; it is reloaded instead.
     if (!journal.has(f.path)) journal.set(f.path, []);
-    journal.get(f.path).push({ keys: null, run: null });
+    journal.get(f.path).push({ ops: [op] });
   }
   undoStack.push(entry);
   queueSave([srcPath, dstPath]);
@@ -185,7 +197,7 @@ export function undo() {
     rebuildFile(model, f.path, f.before);
     for (const [k, v] of remapByKey(f.path, oldDoc, file.doc)) idMap.set(k, v);
     if (!journal.has(f.path)) journal.set(f.path, []);
-    journal.get(f.path).push({ keys: null, run: null, restore: f });
+    journal.get(f.path).push({ ops: null, restore: f });
   }
   queueSave(entry.files.map((f) => f.path));
   notify({ text: `Undone: ${entry.label.toLowerCase()}`, kind: "done" });
@@ -264,18 +276,12 @@ function resolveConflicts(conflicts, paths) {
     let lines = doc.lines;
     let ok = pending.length > 0;
     for (const j of pending) {
-      if (!j.run) {
+      if (!j.ops) {
         ok = false;
         break;
       }
-      const refs = {};
-      for (const [k, key] of Object.entries(j.keys)) {
-        refs[k] = key ? findHeading(doc, key) : null;
-        if (key && !refs[k]) ok = false;
-      }
-      if (!ok) break;
       try {
-        lines = j.run(lines, doc, refs).lines;
+        lines = applyOps(lines, doc, j.ops, ctxFor(file)).lines;
         doc = parseOrg(joinLines(lines, doc.finalNewline));
       } catch {
         ok = false;

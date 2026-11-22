@@ -14,8 +14,9 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 | 1 | 0, 1 | Rename in the docs, history check, build, service worker, deploy workflow, `gitobj.js`, `remote-github.js` (read side), `vault-files.js`, device-check page | §1, §2, §3 (Remote, Auth, Git objects, Which files), §10 | **done** |
 | — | owner | Commit, create the repo, Pages, token, device checks, folder rename (below) | — | **done** |
 | 2 | 2 | The app, read-only and offline (below) | §2, §3 (replica, Pull, engine), §4 (read side), §9 | **done** |
-| 3 | 3 | Blank lines: the gap model in `org-edit.js`, `applyOp` and serialisable ops, invariants, `tools/spacing-report.mjs`, `tools/vault-check.mjs`, property tests. The owner then reviews the spacing report. Independent of session 2; the two can swap. | §5, §8 (Blank lines) | next |
-| 4 | 4a | `tests/fake-github.mjs` (its write side; session 2 made the read side) and the scenario harness (the Emacs actor, a second replica), then local commits (folding edits 3 s apart), push, the lost-response and interrupted-sync cases | §3 (Commit and push, engine, edge cases), §8 (fake, scenarios) | needs 3 |
+| 3 | 3 | Blank lines: the gap model in `org-edit.js`, `applyOp` and serialisable ops, invariants, `tools/spacing-report.mjs`, `tools/vault-check.mjs`, property tests. The owner then reviews the spacing report. | §5, §8 (Blank lines) | **done** |
+| — | owner | Review the spacing report (below) | — | |
+| 4 | 4a | `tests/fake-github.mjs` (its write side; session 2 made the read side) and the scenario harness (the Emacs actor, a second replica), then local commits (folding edits 3 s apart), push, the lost-response and interrupted-sync cases | §3 (Commit and push, engine, edge cases), §8 (fake, scenarios) | next |
 | 5 | 4b | Rebase (replay, then node-diff3), the conflict screen, rescue branch, reset, the zip, seeded random interleavings, `tools/e2e-github.mjs` | §3 (rebase), §4, §8 | needs 4 |
 | 6 | 5 | Obsidian notes: `notes.js`, carrel's Markdown module, wiki links, embeds, footnotes | §6 | |
 | 7 | 6 | Task icons (a session in `agentic-org-planner`), then hardening on the devices | §7, §9 (iOS details) | |
@@ -35,6 +36,20 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 - Check the prototype's inline styles against the CSP (`style-src 'self'` forbids `style="…"` attributes in HTML; setting `el.style` from script is fine).
 - The Android report backs the plan's sizing: a first clone of the whole vault is about 1 MB in about 4 s, and polling an unchanged head is a free 304. The owner's token has no expiry; the 2060-11-01 in the Android report stood for that, before the check page had a "no expiry" box.
 - Don't trust `navigator.onLine`: on Android it said "online" with every radio off (§3, the sync engine). The Sync page's "offline" comes from the failure class of the last request.
+
+## For the owner: the spacing review (after session 3)
+
+Run, in this folder:
+```sh
+node tools/spacing-report.mjs > /tmp/spacing.txt   # read-only; don't commit the output
+```
+It shows the blank-line habit of each cell, counted from the vault, then the 75 headings that go against their cell's majority as `file:line — cell — has/lacks a blank`, then the count per file. For each one, fix in Emacs what was accidental and leave what was meant. The counts sharpen by themselves, since Rumbo counts the vault every time it loads. What the list holds today:
+- 27 level-2 headings that follow their parent's text with no blank line (the cell has one 84% of the time);
+- 27 level-3 headings with a blank line before them (the cell has none 98% of the time). 20 of them follow a closed subtree or the parent's text, where about a third of level-3 headings have one: if that is a habit, say so and level 3 can be split by shape like level 2;
+- 9 + 5 level-2 siblings with a blank line between them;
+- 7 level-2 headings after a closed subtree with no blank line.
+
+Session 4 doesn't wait for this.
 
 ## For the owner, before session 2
 
@@ -59,6 +74,45 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
    ```
 
 ## Hand-off
+
+### Session 3 (2026-11-22)
+**Done**
+- `app/spacing.js`, the Emacs blank-line model in JS:
+  - every line in exactly one slot: bof, the preamble, per heading the run before it, the heading line, its lead and its opaque body, then eof;
+  - the rule cells, counted from the vault (`countSpacing`, `predict`);
+  - the edge memory.
+  - `data.js` puts the counts on `model.spacing`.
+- `app/org-edit.js`: insert, delete, move, removeDone and the cross-file pair are rebuilt as cut and insert on that sequence of blocks. Only the seams they create are resolved, in this order: the old neighbours' run, a bare heading's lead, the edge memory, the rule, keep. The span edits (heading, planning, notes) and promote and demote are as they were. The old `removalSpan`, `insertChunk` and `chain` are gone.
+- `app/ops.js`:
+  - `{path, op, key, args, v: 1}`, with `makeOp`, `targetArg` and `keyOf`;
+  - `applyOp` and `applyOps`;
+  - `checkResult`, the four invariants of §5 checked against a content-only model of each op, independent of the edit code;
+  - `OpError` with `lost`, `invalid` and `invariant`.
+- `edits.js`: `edit(path, label, build)` takes `(doc) => ops`; the journal holds ops, and a per-file edge memory sits beside them. `editTwo` takes the extract and insert pair. Every call site in `edit-ui.js` and `outline.js` builds ops. The model is still never `writable`.
+- Tools (read-only, output never committed), with the cases both of them run in `tools/op-cases.mjs`:
+  - `tools/spacing-report.mjs` and `tools/vault-check.mjs`;
+  - `tools/vault.mjs`: the vault path in the same order as `serve.py`, the files as `vault-files.js` picks them.
+- Tests: 118 pass with `npm install`.
+  - New: `spacing`, `ops`, the app's `org-edit` (the cases from the Emacs design are in it), and `edit-properties`. The last runs every op on every heading of the sample vault and of 300 generated outlines per run with fast-check, a new devDependency.
+  - `org.test.mjs` now imports from `app/`. The old edit tests are kept as `prototype-org-edit.test.mjs`, against the frozen prototype.
+- **Real vault, checked read-only:**
+  - `vault-check`: 35 files, 3,500 headings, every op and every round trip passed (moving or extracting a heading and putting it back, and a state change and back, all give the original bytes). No failures; 74 s.
+  - `spacing-report`: the cells reproduce the §5 table exactly (level 2 after a closed subtree 191 of 198; after the parent's text 147 of 174; siblings 14 of 1,134; level 3 27 of 1,274), with 75 headings against their cell.
+- Checked in WebKit against the fake GitHub, served under `/rumbo/` (Setup, first pull, then in edit mode: move down, delete, add a task, the task dialog), with no console errors; screenshots at the three sizes.
+
+**Findings and decisions**
+- The cells are Emacs's as written, with `l3+` split into `l3` and `l4+`. Splitting level 3 by shape as well wasn't needed: every level-3 shape has the majority "none" today. Leads are never counted, so "first child under a bare parent" isn't a cell, which is why the plan's 79 became 75.
+- The plan's "known edge" needed a memory to make "move back" exact. The edge memory is keyed by identity (title and own notes), so state and level changes don't break it. For replay, session 5 should pass the memory of the commit's base text.
+- A bare parent that loses its only child loses its lead (the run becomes a boundary gap). When a child comes back, the lead is taken from the memory. This was found by the property tests.
+- `setHeading`, `extractSubtree` and `insertSubtree` were added to the op list. The dialog orders its ops planning, then notes, then heading.
+- "Keep" fires only for a cell with fewer than 5 examples. In the real vault that is only `l2-after-preamble`, which has one.
+- A new heading's notes lose leading and trailing blank lines (`insertHeading`).
+- Testing notes: headless WebKit's hit test reports `<html>` over every element here, even with `force`. The scratch run used DOM `click()` instead, and set the "no expiry" box from script. A file opens with `?view=file&file=…`.
+
+**Left for later sessions**
+- Session 4: local commits from the journal's ops; set `writable`; keep the edge memory and the rule with each pending commit, so a replay resolves seams as the edit did. `save()` and `/api/save` in `edits.js` are still the prototype's.
+- Session 7 (or with Diagnostics): show the counted cells in the app (§5 asks for it; the report prints them now).
+- `rebuildFile` doesn't recount `model.spacing` after an edit; the next load does.
 
 ### Session 2 (2026-11-22)
 **Done**

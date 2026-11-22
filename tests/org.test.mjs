@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseOrg, parseHeadingLine, parseBlocks, agendaSections, countSubtree } from "../prototype/org.js";
-import { tokenize, plainText, shortUrl } from "../prototype/inline.js";
-import { parseWorkspace, sortFolders } from "../prototype/workspace.js";
+import { parseOrg, parseHeadingLine, parseBlocks, agendaSections, countSubtree } from "../app/org.js";
+import { tokenize, plainText, shortUrl } from "../app/inline.js";
+import { parseWorkspace, sortFolders } from "../app/workspace.js";
 
 const SAMPLE = `#+TITLE: Errands
 #+SUBTITLE: Money, renting and the bicycle

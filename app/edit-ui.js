@@ -8,6 +8,7 @@ import { state, update, actions } from "./state.js";
 import { countSubtree } from "./org.js";
 import * as E from "./org-edit.js";
 import { edit, editTwo, onNotice, readOnlyReason } from "./edits.js";
+import { makeOp, keyOf, targetArg } from "./ops.js";
 
 const STATES = ["TODO", "NEXT", "INPR", "WAIT", "MAYB", "DONE"];
 const STATE_LABEL = { TODO: "To do", NEXT: "Next", INPR: "Doing", WAIT: "Waiting", MAYB: "Maybe", DONE: "Done" };
@@ -248,14 +249,14 @@ const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 
 
 export function setStateOf(file, hd, s) {
   const label = s === "DONE" ? "Marked done" : `Marked ${STATE_LABEL[s].toLowerCase()}`;
-  return edit(file.path, label, { hd }, (lines, doc, r) => E.setState(lines, r.hd, s));
+  return edit(file.path, label, (d) => makeOp(d, "setState", hd, { state: s }));
 }
 
-const togglePriority = (file, hd) => edit(file.path, hd.priority === "A" ? "Priority cleared" : "Marked high priority", { hd }, (lines, doc, r) => E.setPriority(lines, r.hd, hd.priority === "A" ? null : "A"));
+const togglePriority = (file, hd) => edit(file.path, hd.priority === "A" ? "Priority cleared" : "Marked high priority", (d) => makeOp(d, "setPriority", hd, { priority: hd.priority === "A" ? null : "A" }));
 
 function deleteHeading(file, hd) {
   const label = hd.state ? "Task deleted" : "Section deleted";
-  edit(file.path, label, { hd }, (lines, doc, r) => E.deleteSubtree(lines, r.hd));
+  edit(file.path, label, (d) => makeOp(d, "deleteSubtree", hd));
 }
 
 function askDeleteSection(file, hd) {
@@ -337,21 +338,21 @@ export function openMenu(file, hd, { anchor = null, point = null } = {}) {
     h(
       "div",
       { class: "mi-pair" },
-      menuItem("arrow_upward", "Up", run(() => edit(file.path, "Moved up", { hd }, (l, d, r) => E.moveUp(l, d, r.hd))), { disabled: i <= 0 }),
-      menuItem("arrow_downward", "Down", run(() => edit(file.path, "Moved down", { hd }, (l, d, r) => E.moveDown(l, d, r.hd))), { disabled: i >= sib.length - 1 }),
+      menuItem("arrow_upward", "Up", run(() => edit(file.path, "Moved up", (d) => makeOp(d, "moveUp", hd))), { disabled: i <= 0 }),
+      menuItem("arrow_downward", "Down", run(() => edit(file.path, "Moved down", (d) => makeOp(d, "moveDown", hd))), { disabled: i >= sib.length - 1 }),
     ),
   );
   items.append(
     h(
       "div",
       { class: "mi-pair" },
-      menuItem("format_indent_decrease", "Promote", run(() => edit(file.path, "Promoted", { hd }, (l, d, r) => E.promote(l, r.hd))), { disabled: hd.level <= 1 }),
-      menuItem("format_indent_increase", "Demote", run(() => edit(file.path, "Demoted", { hd }, (l, d, r) => E.demote(l, r.hd))), { disabled: i <= 0 }),
+      menuItem("format_indent_decrease", "Promote", run(() => edit(file.path, "Promoted", (d) => makeOp(d, "promote", hd))), { disabled: hd.level <= 1 }),
+      menuItem("format_indent_increase", "Demote", run(() => edit(file.path, "Demoted", (d) => makeOp(d, "demote", hd))), { disabled: i <= 0 }),
     ),
   );
   if (!task) {
     const done = countSubtree(hd.children).DONE;
-    if (done) items.append(menuItem("remove_done", "Remove done tasks", run(() => edit(file.path, `Removed ${done} done task${done === 1 ? "" : "s"}`, { hd }, (l, d, r) => E.removeDone(l, d, r.hd))), { note: String(done) }));
+    if (done) items.append(menuItem("remove_done", "Remove done tasks", run(() => edit(file.path, `Removed ${done} done task${done === 1 ? "" : "s"}`, (d) => makeOp(d, "removeDone", null, { scope: keyOf(d, hd) }))), { note: String(done) }));
   }
   items.append(menuItem("delete", task ? "Delete task" : "Delete section…", run(() => (task ? deleteHeading(file, hd) : askDeleteSection(file, hd))), { danger: true }));
   body.append(items);
@@ -443,7 +444,7 @@ function openTagSheet(file, hd, anchor, point) {
       point,
       label: "Tags",
       onClose: () => {
-        if (next.join(":") !== hd.tags.join(":")) edit(file.path, "Tags changed", { hd }, (l, d, r) => E.setTags(l, r.hd, next));
+        if (next.join(":") !== hd.tags.join(":")) edit(file.path, "Tags changed", (d) => makeOp(d, "setTags", hd, { tags: next }));
       },
     },
   );
@@ -527,7 +528,7 @@ function openDateSheet(file, hd, key, anchor, point, { onPick = null } = {}) {
   let next = old ? { date: old.date, time: old.time, end: old.end, repeat: old.repeat, active: old.active } : null;
   const apply = (value) => {
     if (onPick) return onPick(value);
-    edit(file.path, value ? `${DATE_TITLES[key]} ${fmtDate(value)}` : `${DATE_TITLES[key]} cleared`, { hd }, (l, d, r) => E.setPlanning(l, r.hd, { [key]: value }));
+    edit(file.path, value ? `${DATE_TITLES[key]} ${fmtDate(value)}` : `${DATE_TITLES[key]} cleared`, (d) => makeOp(d, "setPlanning", hd, { patch: { [key]: value } }));
   };
   const p = openPanel(
     h(
@@ -695,7 +696,7 @@ export function openTaskDialog({ file, hd = null, ref = null, where = "after", k
       const fields = { state: isTask ? draft.state : null, priority: draft.priority, title, tags: draft.tags, scheduled: draft.scheduled, deadline: draft.deadline, body: draft.body, level: 1 };
       const r0 = liveRef();
       if (ref && !r0) return (problem.textContent = "The place for it is gone: the file changed. Cancel and try again.");
-      const at = edit(file.path, isTask ? "Task added" : "Section added", { ref: r0 }, (l, d, r) => E.insertHeading(l, r.ref, ref ? where : "end", fields));
+      const at = edit(file.path, isTask ? "Task added" : "Section added", (d) => makeOp(d, "insertHeading", null, { ref: keyOf(d, r0), where: ref ? where : "end", fields }));
       dlg.close();
       if (at) requestAnimationFrame(() => requestAnimationFrame(() => actions.reveal?.(at.id)));
       return;
@@ -709,12 +710,14 @@ export function openTaskDialog({ file, hd = null, ref = null, where = "after", k
       const b = draft[k];
       if (JSON.stringify(a ? [a.date, a.time, a.repeat] : null) !== JSON.stringify(b ? [b.date, b.time, b.repeat] : null)) plan[k] = b;
     }
-    const steps = [(l, x) => E.setHeading(l, x, patch)];
-    if (Object.keys(plan).length) steps.push((l, x) => E.setPlanning(l, x, plan));
-    steps.push((l, x) => E.setBody(l, x, draft.body));
     const now = live();
     if (!now) return (problem.textContent = "This heading changed in the file meanwhile. Cancel and open it again.");
-    const ok = edit(file.path, "Changes saved", { hd: now }, (l, d, r) => E.chain(l, r.hd, steps));
+    // The heading goes last, so a new title can't hide the heading from the ops before it.
+    const ok = edit(file.path, "Changes saved", (d) => [
+      ...(Object.keys(plan).length ? [makeOp(d, "setPlanning", now, { patch: plan })] : []),
+      makeOp(d, "setBody", now, { text: draft.body }),
+      makeOp(d, "setHeading", now, { patch }),
+    ]);
     if (ok) dlg.close();
   }
 }
@@ -742,16 +745,15 @@ export function openMovePicker(file, hd) {
   const same = (f) => f.path === file.path;
   const moveTo = (f, target, label) =>
     go(label, () => {
-      if (same(f)) edit(file.path, label, { hd, t: target.h || null }, (l, d, r) => E.moveSubtree(l, r.hd, target.h ? { [target.how]: r.t, ...(target.at ? { at: target.at } : {}) } : { fileEnd: true, level: 1 }));
+      const where = (d) => targetArg(d, target.h ? { [target.how]: target.h, ...(target.at ? { at: target.at } : {}) } : { fileEnd: true, level: 1 });
+      if (same(f)) edit(file.path, label, (d) => makeOp(d, "moveSubtree", hd, { target: where(d) }));
       else
         editTwo(
           file.path,
           f.path,
           label,
-          { hd },
-          { t: target.h || null },
-          (l, d, r) => E.extractSubtree(l, r.hd),
-          (l, d, r, chunk, level) => E.insertSubtree(l, chunk, level, target.h ? { [target.how]: r.t, ...(target.at ? { at: target.at } : {}) } : { fileEnd: true, level: 1 }),
+          (d) => makeOp(d, "extractSubtree", hd),
+          (d, chunk, level) => makeOp(d, "insertSubtree", null, { chunk, fromLevel: level, target: where(d) }),
         );
     });
   function draw() {
@@ -790,10 +792,10 @@ export function openMovePicker(file, hd) {
   const quick = h(
     "div",
     { class: "chip-row mv-quick" },
-    h("button", { class: "chip", disabled: i <= 0 || null, onclick: () => go("Moved up", () => edit(file.path, "Moved up", { hd }, (l, d, r) => E.moveUp(l, d, r.hd))) }, icon("arrow_upward"), "Up"),
-    h("button", { class: "chip", disabled: i >= sib.length - 1 || null, onclick: () => go("Moved down", () => edit(file.path, "Moved down", { hd }, (l, d, r) => E.moveDown(l, d, r.hd))) }, icon("arrow_downward"), "Down"),
-    h("button", { class: "chip", disabled: hd.level <= 1 || null, onclick: () => go("Promoted", () => edit(file.path, "Promoted", { hd }, (l, d, r) => E.promote(l, r.hd))) }, icon("format_indent_decrease"), "Promote"),
-    h("button", { class: "chip", disabled: i <= 0 || null, onclick: () => go("Demoted", () => edit(file.path, "Demoted", { hd }, (l, d, r) => E.demote(l, r.hd))) }, icon("format_indent_increase"), "Demote"),
+    h("button", { class: "chip", disabled: i <= 0 || null, onclick: () => go("Moved up", () => edit(file.path, "Moved up", (d) => makeOp(d, "moveUp", hd))) }, icon("arrow_upward"), "Up"),
+    h("button", { class: "chip", disabled: i >= sib.length - 1 || null, onclick: () => go("Moved down", () => edit(file.path, "Moved down", (d) => makeOp(d, "moveDown", hd))) }, icon("arrow_downward"), "Down"),
+    h("button", { class: "chip", disabled: hd.level <= 1 || null, onclick: () => go("Promoted", () => edit(file.path, "Promoted", (d) => makeOp(d, "promote", hd))) }, icon("format_indent_decrease"), "Promote"),
+    h("button", { class: "chip", disabled: i <= 0 || null, onclick: () => go("Demoted", () => edit(file.path, "Demoted", (d) => makeOp(d, "demote", hd))) }, icon("format_indent_increase"), "Demote"),
   );
   draw();
   const p = openPanel(

@@ -286,30 +286,34 @@ Rumbo adopts the Emacs model instead (`agentic-org-planner/lisp/ps-blank-lines-t
   - a delete removes the entry with its `lead` and leaves one seam where there were two;
   - an insert or move creates two seams around the new place and closes one at the old place.
 - **Resolving a seam**, first rule that applies:
-  1. **Known edge:** the same two neighbours were adjacent before the edit (a move back, an undo) → their old gap.
-  2. **The style rule:** the cell for (level, what precedes it) → its majority, from the table above.
-  3. **Keep** the gap that is there. Never zero it for lack of evidence: that deletes blank lines put in by hand (the Emacs "keep" rung).
+  1. **Known edge:** the same two neighbours were adjacent before the edit (a move back, an undo) → their old gap. "Before" is the text being edited, then the **edge memory**: the runs between neighbours in earlier versions of the file (as loaded, and after each edit on this page), keyed by each heading's identity (its title and its own non-blank notes; not its state or level). Headings whose identity isn't unique in the file are left out.
+  2. **A bare heading's lead:** when the next heading is deeper than a heading with no notes, the run is that heading's `lead`. It keeps the lead it has; one that lost its lead (its only child went) gets it back from the edge memory, else none.
+  3. **The style rule:** the cell for (level, what precedes it) → its majority, from the table above.
+  4. **Keep** the gap that is there: at an insert both new seams take it; where two gaps merge, the longer one stays. Never zero it for lack of evidence: that deletes blank lines put in by hand (the Emacs "keep" rung).
+- The blank lines at the start and end of the file never move, and promote and demote keep every gap (their neighbours are the same).
 - All other gaps stay byte-identical.
 
 ### The style rule has one source: the vault
-- The cells are counted from the vault's own files every time it loads, using the cell definitions of `ps/blank-lines-rule-cell` (with level 3 counted separately, so a different level-3 habit is learnt rather than assumed). A cell needs at least 5 examples to be used.
+- The cells are counted from the vault's own files every time it loads, using the cell definitions of `ps/blank-lines-rule-cell` as they are (`l1`, `l2-after-preamble`, `l2-parent-…`, `l2-from-deeper-…`, `l2-sibling-…`, each `-prose` or `-bare`), except that level 3 is counted apart from 4 and deeper, so a different level-3 habit is learnt rather than assumed. Only boundary gaps are counted, never leads. A cell needs at least 5 examples to be used; a tie goes to the built-in default.
 - The built-in default, used before the counts exist, is the rule above.
-- Settings → Diagnostics shows the counted cells.
+- Settings → Diagnostics shows the counted cells (not built yet; `tools/spacing-report.mjs` prints them).
 - No spacing setting is stored separately in the app: the vault is the setting.
 
 ### Spacing review
-`tools/spacing-report.mjs` reads a vault (path given on the command line), counts the cells and lists every heading that goes against its cell's majority as `file:line — cell — has/lacks blank`. It is local and read-only, and its output is never committed. The owner reviews the list once, fixes in Emacs what was accidental, and keeps what was meant. The counts then get sharper on their own. There are 79 such headings today, three quarters of them in 7 files.
+`tools/spacing-report.mjs` reads a vault (path given on the command line), counts the cells and lists every heading that goes against its cell's majority as `file:line — cell — has/lacks blank`. It is local and read-only, and its output is never committed. The owner reviews the list once, fixes in Emacs what was accidental, and keeps what was meant. The counts then get sharper on their own. There are 75 such headings today (2026-11-22). The 79 counted earlier included 4 blank lines before the first child of a bare parent, which this model reads as that parent's lead.
 
 ### Serialisable edits
 - Every edit is data: `{ path, op, key, args, v }`.
-  - `op` is one of the `org-edit.js` operations: `setState`, `setPriority`, `setTitle`, `setTags`, `setPlanning`, `setBody`, `insertHeading`, `deleteSubtree`, `removeDone`, `moveSubtree`, `promote`, `demote`, `moveUp`, `moveDown`.
+  - `op` is one of the `org-edit.js` operations: `setState`, `setPriority`, `setTitle`, `setTags`, `setHeading`, `setPlanning`, `setBody`, `insertHeading`, `deleteSubtree`, `removeDone`, `moveSubtree`, `promote`, `demote`, `moveUp`, `moveDown`, `extractSubtree`, `insertSubtree`.
+  - Headings in `args` (a move's target, an insert's reference, removeDone's scope) are keys too. `insertSubtree` carries the moved lines.
   - `key` is the heading's `headingKey` (its title path and its place among same-named headings).
   - `v` is the op format's version.
 - One entry point, `applyOp(lines, doc, op)`, runs an op for an edit and for replay alike. It replaces the closures in the edit journal (`prototype/edits.js:115`), which can't be stored or replayed after a restart.
-- A move across files is two ops in one local commit.
+- A move across files is two ops in one local commit: `extractSubtree` in one file, `insertSubtree` with the taken lines in the other.
+- The task dialog sends `setPlanning`, `setBody`, then `setHeading` as one edit: the heading goes last, so a new title can't hide the heading from the ops before it.
 
 ### Invariants checked before a local commit
-Each edit, and each rebased commit, must pass all of these, or it is refused with a message and nothing is written:
+Each edit, and each rebased commit, must pass all of these, or it is refused with a message and nothing is written. The hunks and the expected text come from the op and the old text alone (`ops.js`), not from the edit code:
 - Lines outside the edit's own hunks are byte-identical to before.
 - With all blank lines removed, old and new differ only in the edited content.
 - No line starts with `<<<<<<<`, `=======` or `>>>>>>>` unless it did before.

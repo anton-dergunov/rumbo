@@ -9,8 +9,8 @@ import { countSubtree } from "./org.js";
 import { state, update, overridesFor, actions } from "./state.js";
 import { openMenu, openStatePicker, openTaskDialog, setStateOf } from "./edit-ui.js";
 import { edit, canUndo, undo } from "./edits.js";
+import { makeOp, targetArg } from "./ops.js";
 import { attachGestures } from "./gestures.js";
-import * as E from "./org-edit.js";
 
 // Which way into editing is being tried (the harness switch `edit`), and whether edit mode is on.
 const editMode = () => state.edit === "mode" && state.editing;
@@ -144,7 +144,7 @@ function gestureHooks(file) {
     menu: (hd, node, point) => hd && openMenu(file, hd, { point }),
     drop: (hd, t) => {
       if (!hd || !t.target || t.target === hd) return;
-      edit(file.path, "Moved", { hd, t: t.target }, (l, d, r) => E.moveSubtree(l, r.hd, t.how === "into" ? { into: r.t, at: "first" } : { [t.how]: r.t }));
+      edit(file.path, "Moved", (d) => makeOp(d, "moveSubtree", hd, { target: targetArg(d, t.how === "into" ? { into: t.target, at: "first" } : { [t.how]: t.target }) }));
     },
     swipeActions: (hd, side) => {
       if (!hd) return [];
@@ -161,7 +161,7 @@ function gestureHooks(file) {
       }
       return [
         { icon: "more_horiz", label: "More", cls: "sw-more", run: () => openMenu(file, hd, { anchor: document.querySelector(`.node[data-id="${hd.id}"] > .head`) }) },
-        { icon: "delete", label: "Delete", cls: "sw-del", run: () => (task ? edit(file.path, "Task deleted", { hd }, (l, d, r) => E.deleteSubtree(l, r.hd)) : openMenu(file, hd, {})) },
+        { icon: "delete", label: "Delete", cls: "sw-del", run: () => (task ? edit(file.path, "Task deleted", (d) => makeOp(d, "deleteSubtree", hd)) : openMenu(file, hd, {})) },
       ];
     },
   };

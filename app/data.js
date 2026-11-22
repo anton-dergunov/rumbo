@@ -5,6 +5,7 @@ import { parseOrg, agendaSections, countSubtree, OPEN_STATES } from "./org.js";
 import { plainText } from "./inline.js";
 import { parseWorkspace, sortFolders } from "./workspace.js";
 import { isIncluded } from "./vault-files.js";
+import { countSpacing } from "./spacing.js";
 
 /** A short, stable tag per path, so heading ids don't shift when another file is added. */
 export function pathTag(path) {
@@ -101,6 +102,8 @@ export function buildModel(records, { name = "Plans" } = {}) {
     files,
     folders,
     agenda: agendaSections(files),
+    // The blank-line rule for new seams, counted from the vault's own files (spacing.js): the vault is the setting.
+    spacing: countSpacing(files.map((f) => f.doc)),
     headingById,
     byPath: new Map(files.map((f) => [f.path, f])),
     findFile(ref) {

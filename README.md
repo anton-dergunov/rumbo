@@ -24,12 +24,15 @@ alongside it.
 uv run prototype/serve.py                  # the prototype at http://127.0.0.1:8650/
 uv run prototype/serve.py --host 0.0.0.0   # open it from a tablet or phone on the same network
 uv run prototype/serve.py --sample         # with the synthetic sample vault only
-npm test                                   # tests (no npm install needed)
+npm install                                # once: the test dependencies
+npm test                                   # tests (without npm install, some are skipped)
 node tools/build.mjs                       # build the app into dist/
+node tools/spacing-report.mjs              # the vault's blank-line habits, and the headings that differ
+node tools/vault-check.mjs                 # every edit on every heading of the vault, in memory
 ```
 
-The prototype finds the vault the same way the Emacs config does: `--vault DIR`, then
-`$PS_ORG_BASE`, then `:current` in `~/.emacs.d/vaults.eld`. File icons, folder icons and folder
+The prototype and the two vault tools find the vault the same way the Emacs config does: `--vault DIR`, then
+`$PS_ORG_BASE`, then `:current` in `~/.emacs.d/vaults.eld`. The tools only read it. File icons, folder icons and folder
 order come from the vault's own `workspace.org`, so nothing is configured twice.
 
 See [prototype/README.md](prototype/README.md) for every switch.
