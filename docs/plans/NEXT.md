@@ -18,7 +18,7 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 | — | owner | Review the spacing report (below) | — | **done** |
 | 4 | 4a | `tests/fake-github.mjs` (its write side; session 2 made the read side) and the scenario harness (the Emacs actor, a second replica), then local commits (folding edits 3 s apart), push, the lost-response and interrupted-sync cases | §3 (Commit and push, engine, edge cases), §8 (fake, scenarios) | **done** |
 | 5 | 4b | Rebase (replay, then node-diff3), the conflict screen, rescue branch, reset, the zip, seeded random interleavings, `tools/e2e-github.mjs` | §3 (rebase), §4, §8 | **done** |
-| — | owner | Run `tools/e2e-github.mjs` on a throwaway repo (below) | — | |
+| — | owner | Run `tools/e2e-github.mjs` on a throwaway repo (below) | — | **done** |
 | 6 | 5 | Obsidian notes: `notes.js`, carrel's Markdown module, wiki links, embeds, footnotes | §6 | next |
 | 7 | 6 | Task icons (a session in `agentic-org-planner`), the on-device fallback model (below), then hardening on the devices | §7, §9 (iOS details) | |
 
@@ -69,7 +69,9 @@ Emacs's icons (`.ps/task-icons.json`, §7) stay the source. A task with no entry
 
 ## For the owner: the end-to-end run (after session 5)
 
-`tools/e2e-github.mjs` runs Rumbo's sync code against the real GitHub, with real `git` running the Emacs sync's commands beside it. It has not been run yet: it needs a repo of its own.
+`tools/e2e-github.mjs` runs Rumbo's sync code against the real GitHub, with real `git` running the Emacs sync's commands beside it.
+
+**Done** (2026-11-22): all 6 steps passed on a private throwaway repo (26 sample files). Rerun it after any change to `remote-github.js`, `sync.js`, `merge.js` or `rescue.js`. To set it up again:
 1. Make an **empty private** repo on GitHub, for example `rumbo-e2e`. Don't add a README; it must be empty.
 2. Make a fine-grained token for that repo only, with *Contents: read and write*, and a short expiry.
 3. In this folder (after `npm install`):
@@ -144,7 +146,7 @@ It shows the blank-line habit of each cell, counted from the vault, then the hea
   - "Ways out": Push my changes to a branch, Download everything, Reset to GitHub (always offered; with commits pending, it rescues first);
   - log lines for rebase, rescue, resolve.
   - The unused toast kinds (`saved`, `saving`, `memory`) and their CSS are gone.
-- **`tools/e2e-github.mjs`**, opt-in. Not run yet; see "For the owner" above.
+- **`tools/e2e-github.mjs`**, opt-in. The owner ran it the same day: all 6 steps passed against the real GitHub.
 - **Tests:** 182 pass with `npm install`.
   - New suites: `merge` (15), `edits-replay`, and `interleavings` (40 seeds by default, about 1.5 s; 300 seeds pass, and 60 of them reach a conflict and a way out).
   - The scenarios gain: replay after Emacs, a refused push that rebases, merge only, a conflict with each way out, a file deleted upstream, the zip's contents, reset after a rescue, and the kill at every request of a sync that rebases.
