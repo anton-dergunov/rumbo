@@ -13,10 +13,10 @@ Second charter line.
 
 * Current money matters
 ** TODO Double check that all receipts are correct
-** WAIT Receive cashback for energy supplier change
+** WAIT Receive the refund for the returned kettle
 SCHEDULED: <2027-01-10 Sun>
-Payment will usually be made within 3-6 months
-https://www.moneysupermarket.com/gas-and-electricity/cashback-terms-conditions/
+The shop says it takes two to four weeks
+https://example.com/help/refunds/
 ** TODO [#A] Call the GP :phone:easy:
 - first point
   continued

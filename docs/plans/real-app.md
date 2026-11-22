@@ -1,6 +1,6 @@
 # Rumbo: the real app
 
-*Rumbo* is Spanish for "course, heading, bearing": a plan is a heading to steer by, and Org files are made of headings. It is the new name of Plan Viewer. Until step 0 below, the repo and its folder are still called `plan-viewer`.
+*Rumbo* is Spanish for "course, heading, bearing": a plan is a heading to steer by, and Org files are made of headings. It is the new name of Plan Viewer. The repo had no GitHub remote before, so step 0 creates it as `rumbo`; the local folder is renamed after that session. The work is split into sessions, tracked in `NEXT.md` beside this plan.
 
 This plan turns the prototype into the app used every day: offline-first, read-write, on the iPad 11" and iPad mini (first), a large Android phone, perhaps an Android e-ink reader, and later the Mac. The look and the editing design are settled (CLAUDE.md, "Settled design"); this document settles how the app is built, deployed and synced, and how it edits without disturbing the files.
 
@@ -99,7 +99,7 @@ Git it is. In the browser, **isomorphic-git is ruled out**: github.com's git end
   - The Obsidian repo: *Contents* read only.
 - OAuth's device flow is not possible from a browser: `github.com/login/*` has no CORS.
 - The token is stored in IndexedDB on the device, in the app's origin.
-- GitHub reports a token's expiry in the `github-authentication-token-expiration` response header. Rumbo shows a warning two weeks ahead. A `401` means "sign in again", and nothing local is lost.
+- GitHub reports a token's expiry in the `github-authentication-token-expiration` response header, but its CORS policy doesn't expose that header to a browser (checked 2026-11-22). So Setup asks for the expiry date GitHub shows when the token is made, and Rumbo shows a warning two weeks ahead. A `401` means "sign in again", and nothing local is lost.
 - Protecting the token:
   - a strict Content Security Policy;
   - no third-party scripts;
@@ -184,7 +184,9 @@ The result of 2 or 3 also has to pass the edit invariants (§5) before it replac
 |---|---|---|
 | offline | network error or timeout | retry with backoff; edits stay local |
 | auth | `401`, or `403` without rate-limit headers | stop; "sign in again" |
-| rate-limited | `403`/`429` with `x-ratelimit-remaining: 0` | wait until `x-ratelimit-reset` |
+| rate-limited | `403`/`429` with `x-ratelimit-remaining: 0` or `retry-after` | wait until `x-ratelimit-reset` |
+| missing | `404`: a wrong repo or branch, or a private repo the token can't see | stop; check Setup |
+| rejected | `409`/`422`, such as a ref update that is not a fast-forward | pull and rebase, then push again |
 | server | `5xx` | retry with backoff |
 | conflict | a rebase step 4 | stop pushing; the conflict screen |
 | diverged | the branch was rewritten | stop; ask |
@@ -446,7 +448,7 @@ iOS details to carry over from calorie-logger and lectern:
 ## 10. Order of work
 
 0. **Rename to Rumbo:**
-   - rename the GitHub repo and the local folder;
+   - create the public GitHub repo `rumbo` (there was no remote) and rename the local folder;
    - update CLAUDE.md, README and memory (the memory folder is keyed by the project path);
    - check the history for private data;
    - make the repo public and turn on Pages.

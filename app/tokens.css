@@ -1,0 +1,195 @@
+/* Design tokens. Every colour and font in the prototype comes from here; one block per theme.
+   Paper and Dusk are the reading pair (serif text, warm); Slate and Night the app pair (sans, cool). */
+
+:root,
+[data-theme="paper"] {
+  color-scheme: light;
+  --bg: #f4efe5;
+  --surface: #fbf8f2;
+  --surface-2: #efe8db;
+  --sunk: #e9e1d2;
+  --ink: #2b2620;
+  --ink-2: #554d42;
+  --ink-3: #887f71;
+  --ink-4: #b4ab9b;
+  --rule: #ded4c2;
+  --rule-soft: #e9e1d2;
+  --accent: #2e6a64;
+  --link: #855b14;
+  --select: #e4ddcd;
+
+  --l1: #a4472b;
+  --l2: #5f7a35;
+  --l3: #2f638a;
+  --l4: #8c6a18;
+  --l5: #3b7f77;
+
+  --st-todo: #a29886;
+  --st-next: #2e6a64;
+  --st-inpr: #b0670f;
+  --st-wait: #6b5b9a;
+  --st-mayb: #a59b8b;
+  --st-done: #a59b8b;
+  --prio-a: #b2412b;
+
+  --font-read: "Literata", "Iowan Old Style", Charter, Georgia, serif;
+  --font-ui: "IBM Plex Sans", -apple-system, "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --fs-read: 17px;
+  --lh-read: 1.62;
+  --fs-ui: 15px;
+  --row-pad: 9px;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgb(60 45 20 / 0.06), 0 6px 20px rgb(60 45 20 / 0.06);
+  --stage: #d9d3c7;
+  /* editing: text on the accent colour, the toast, the backdrop behind dialogs */
+  --on-accent: #fbf8f2;
+  --toast-bg: #2b2620;
+  --toast-ink: #f4efe5;
+  --toast-act: #9fd3c9;
+  --scrim: rgb(40 30 15 / 0.32);
+}
+
+[data-theme="slate"] {
+  color-scheme: light;
+  --bg: #f2f3f5;
+  --surface: #ffffff;
+  --surface-2: #e9ebef;
+  --sunk: #e5e8ec;
+  --ink: #1b1f25;
+  --ink-2: #48515e;
+  --ink-3: #7f8896;
+  --ink-4: #b0b7c1;
+  --rule: #dbdfe5;
+  --rule-soft: #e8ebef;
+  --accent: #3156c8;
+  --link: #3156c8;
+  --select: #e2e7f3;
+
+  --l1: #1b1f25;
+  --l2: #3156c8;
+  --l3: #7f8896;
+  --l4: #7f8896;
+  --l5: #7f8896;
+
+  --st-todo: #a2a9b4;
+  --st-next: #3156c8;
+  --st-inpr: #c0730a;
+  --st-wait: #7655c2;
+  --st-mayb: #a2a9b4;
+  --st-done: #a2a9b4;
+  --prio-a: #d0442f;
+
+  --font-read: "Inter", -apple-system, system-ui, sans-serif;
+  --font-ui: "Inter", -apple-system, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --fs-read: 15.5px;
+  --lh-read: 1.55;
+  --fs-ui: 14.5px;
+  --row-pad: 7px;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgb(20 30 50 / 0.06), 0 6px 18px rgb(20 30 50 / 0.06);
+  --stage: #cfd3da;
+  /* editing: text on the accent colour, the toast, the backdrop behind dialogs */
+  --on-accent: #ffffff;
+  --toast-bg: #1b1f25;
+  --toast-ink: #f2f3f5;
+  --toast-act: #a9bbff;
+  --scrim: rgb(15 20 30 / 0.32);
+}
+
+[data-theme="dusk"] {
+  color-scheme: dark;
+  --bg: #1b1814;
+  --surface: #221e19;
+  --surface-2: #2a251f;
+  --sunk: #2e2922;
+  --ink: #ebe3d5;
+  --ink-2: #c0b6a5;
+  --ink-3: #8d8473;
+  --ink-4: #5f584c;
+  --rule: #39332a;
+  --rule-soft: #2f2a23;
+  --accent: #7cc3b6;
+  --link: #d9b26a;
+  --select: #352f27;
+
+  --l1: #e39272;
+  --l2: #afc27e;
+  --l3: #8fb8db;
+  --l4: #d9b86a;
+  --l5: #7cc4ba;
+
+  --st-todo: #7d7465;
+  --st-next: #7cc3b6;
+  --st-inpr: #e7a653;
+  --st-wait: #b5a5e3;
+  --st-mayb: #8d8473;
+  --st-done: #8d8473;
+  --prio-a: #e5795c;
+
+  --font-read: "Literata", "Iowan Old Style", Charter, Georgia, serif;
+  --font-ui: "IBM Plex Sans", -apple-system, "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --fs-read: 17px;
+  --lh-read: 1.62;
+  --fs-ui: 15px;
+  --row-pad: 9px;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.25);
+  --stage: #0f0d0b;
+  /* editing: text on the accent colour, the toast, the backdrop behind dialogs */
+  --on-accent: #1b1712;
+  --toast-bg: #efe6d8;
+  --toast-ink: #1b1712;
+  --toast-act: #2e6a64;
+  --scrim: rgb(0 0 0 / 0.5);
+}
+
+[data-theme="night"] {
+  color-scheme: dark;
+  --bg: #121519;
+  --surface: #181c21;
+  --surface-2: #1f242a;
+  --sunk: #242a31;
+  --ink: #e3e7ec;
+  --ink-2: #b2bac5;
+  --ink-3: #7d8794;
+  --ink-4: #4f5661;
+  --rule: #2a3038;
+  --rule-soft: #22272e;
+  --accent: #82a5ff;
+  --link: #82a5ff;
+  --select: #232b38;
+
+  --l1: #e3e7ec;
+  --l2: #82a5ff;
+  --l3: #7d8794;
+  --l4: #7d8794;
+  --l5: #7d8794;
+
+  --st-todo: #6c7480;
+  --st-next: #82a5ff;
+  --st-inpr: #f0a84a;
+  --st-wait: #b59cff;
+  --st-mayb: #7d8794;
+  --st-done: #7d8794;
+  --prio-a: #ff7a66;
+
+  --font-read: "Inter", -apple-system, system-ui, sans-serif;
+  --font-ui: "Inter", -apple-system, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --fs-read: 15.5px;
+  --lh-read: 1.55;
+  --fs-ui: 14.5px;
+  --row-pad: 7px;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.3);
+  --stage: #08090b;
+  /* editing: text on the accent colour, the toast, the backdrop behind dialogs */
+  --on-accent: #0e1114;
+  --toast-bg: #e3e7ec;
+  --toast-ink: #121519;
+  --toast-act: #3156c8;
+  --scrim: rgb(0 0 0 / 0.55);
+}

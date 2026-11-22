@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Rumbo: a compass needle on paper. Drawn for this project; full-bleed, so the
+       platform's own mask rounds it, and the mark sits inside the 80% maskable safe zone. -->
+  <rect width="512" height="512" fill="#f4efe5"/>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#2b2620" stroke-width="14"/>
+  <g stroke="#2b2620" stroke-width="10" stroke-linecap="round">
+    <line x1="256" y1="92" x2="256" y2="118"/>
+    <line x1="256" y1="394" x2="256" y2="420"/>
+    <line x1="92" y1="256" x2="118" y2="256"/>
+    <line x1="394" y1="256" x2="420" y2="256"/>
+  </g>
+  <g transform="rotate(35 256 256)">
+    <path d="M256 128 L292 256 L220 256 Z" fill="#a4472b"/>
+    <path d="M256 384 L292 256 L220 256 Z" fill="#887f71"/>
+  </g>
+  <circle cx="256" cy="256" r="16" fill="#f4efe5" stroke="#2b2620" stroke-width="8"/>
+</svg>

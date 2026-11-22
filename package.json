@@ -1,0 +1,11 @@
+{
+  "name": "rumbo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A calm planner for an Org-mode vault, for tablets and phones.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/",
+    "build": "node tools/build.mjs"
+  }
+}

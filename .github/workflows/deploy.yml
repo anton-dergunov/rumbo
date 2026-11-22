@@ -1,0 +1,52 @@
+name: Deploy Rumbo
+
+# Tests, builds and publishes the app to GitHub Pages on every push to main.
+# Every URL in the app is relative, so the same build serves at
+# https://<owner>.github.io/<repository>/ and from any local server.
+# Pages serves only the app's code; the vault goes between each device and api.github.com.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Check the syntax of every app module
+        run: git ls-files 'app/*.js' | xargs -n1 node --check
+      - run: node --test tests/
+      - run: python -m unittest discover tests
+      - run: node tools/build.mjs
+      - run: git diff --check
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
