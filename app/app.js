@@ -16,6 +16,8 @@ import { pushRescue, buildZip, shareOrDownload, keepTheirs, keepMine, rescueAndS
 import { renderSetup } from "./setup.js";
 import { createNotes } from "./notes.js";
 import { startPwa, onStatus as onPwaStatus, applyUpdate } from "./pwa.js";
+import { createIconModel } from "./icon-model.js";
+import { createIcons } from "./icons.js";
 
 const viewport = document.getElementById("viewport");
 // The app redraws into its own root; the editing layer beside it (dialogs, menus, the toast) is
@@ -31,6 +33,15 @@ let model = null;
 let remote = null;
 let engine = null;
 let notes = null; // the Obsidian notes (notes.js), from the notes repo named at Setup
+// Guessed icons for agenda tasks Emacs hasn't given one yet (icons.js); the model loads only then.
+const iconModel = createIconModel();
+const icons = createIcons({
+  store,
+  iconModel,
+  redraw: () => state.view === "agenda" && render(),
+  busy: () => runtime.sync?.status === "syncing",
+  log: (e) => store.log(e).catch(() => {}),
+});
 
 const repoName = (meta) => (meta.repo || "").split("/").pop() || "Plans";
 
@@ -51,6 +62,7 @@ let lastView = null;
 function render() {
   if (!model) return;
   applyTheme();
+  icons.attach(model);
   setModel(model);
   setOutlineModel(model);
   setEditModel(model);
@@ -71,6 +83,7 @@ function render() {
     if (scrolls.has(el.dataset.scroll)) el.scrollTop = scrolls.get(el.dataset.scroll);
   }
   placeChanged();
+  icons.schedule(model, state.view);
 }
 
 function message(text, retry = false) {
@@ -516,6 +529,7 @@ async function boot() {
   if (NAVS.includes(prefs?.nav)) state.nav = prefs.nav;
   applyTheme();
   runtime.meta = meta;
+  await icons.load();
   if (!meta.repo || !meta.token) return showSetup({ ...(await checkPageSettings()), ...meta });
 
   model = buildModel(await store.allFiles(), { name: repoName(meta) });

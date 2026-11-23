@@ -6,14 +6,16 @@ import assert from "node:assert/strict";
 import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, appendFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
-import { build, precacheUrl } from "../tools/build.mjs";
+import { build, precacheUrl, notPrecached, ORT_WASM } from "../tools/build.mjs";
+import { CACHE_PREFIX } from "../app/icon-files.js";
+import { createHash } from "node:crypto";
 
 const app = new URL("../app", import.meta.url).pathname;
 const walk = (dir) => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
 
-function freshBuild(src = app) {
+function freshBuild(src = app, model = null) {
   const out = mkdtempSync(join(tmpdir(), "rumbo-build-"));
-  const r = build({ src, out });
+  const r = build({ src, out, model });
   return { ...r, read: (p) => readFileSync(join(out, p), "utf8"), files: walk(out).map((p) => relative(out, p)) };
 }
 
@@ -49,7 +51,7 @@ test("the whole shell is precached, pages under their directory URLs, the worker
   const b = freshBuild();
   const sw = b.read("sw.js");
   const precache = precacheOf(sw);
-  assert.deepEqual([...precache].sort(), b.files.filter((f) => f !== "sw.js").map(precacheUrl).sort());
+  assert.deepEqual([...precache].sort(), b.files.filter((f) => f !== "sw.js" && !notPrecached(f)).map(precacheUrl).sort());
   assert.ok(precache.includes("./"));
   assert.ok(!precache.some((u) => u.endsWith("index.html")));
   assert.ok(!precache.some((u) => /404/.test(u)));
@@ -131,10 +133,77 @@ test("every page's CSP allows only itself and api.github.com, and no HTML uses s
     assert.ok(csp, `${f}: no CSP`);
     const hosts = csp.match(/https?:\/\/[^\s;]+/g) || [];
     assert.deepEqual([...new Set(hosts)], ["https://api.github.com"], `${f}: ${hosts}`);
-    assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval/, f);
+    // WebAssembly (the icon model's runtime) is the one thing allowed beyond 'self'.
+    assert.match(csp, /script-src 'self' 'wasm-unsafe-eval';/, f);
+    assert.doesNotMatch(csp.replace("'wasm-unsafe-eval'", ""), /unsafe-inline|unsafe-eval/, f);
     assert.match(csp, /style-src 'self'/, f);
     assert.doesNotMatch(html, /\sstyle="/, `${f}: style attribute`);
     assert.doesNotMatch(html, /fonts\.googleapis|fonts\.gstatic/, f);
   }
   for (const f of b.files.filter((f) => /\.m?js$/.test(f))) assert.doesNotMatch(b.read(f), /setAttribute\(\s*["']style["']/, `${f}: style attribute set from script`);
+});
+
+/** A source tree whose icon manifest names a small fake encoder and tokenizer. */
+function fakeModelSource() {
+  const src = mkdtempSync(join(tmpdir(), "rumbo-src-"));
+  cpSync(app, src, { recursive: true });
+  const model = Buffer.from(Array.from({ length: 2500 }, (_, i) => i % 251));
+  const tokenizer = Buffer.from('{"fake": true}');
+  const sha = (b) => createHash("sha256").update(b).digest("hex");
+  const mPath = join(src, "icon-model", "manifest.json");
+  const manifest = JSON.parse(readFileSync(mPath, "utf8"));
+  manifest.encoder.model = { url: "https://example.org/x/model_int8.onnx", sha256: sha(model), size: model.length };
+  manifest.encoder.tokenizer = { url: "https://example.org/x/tokenizer.json", sha256: sha(tokenizer), size: tokenizer.length };
+  writeFileSync(mPath, JSON.stringify(manifest));
+  return { src, model, tokenizer, sha };
+}
+
+test("the icon model is laid out in parts with a list of sizes and sha256s, and none of it is precached", () => {
+  const { src, model, tokenizer, sha } = fakeModelSource();
+  const b = freshBuild(src, { model, tokenizer, partSize: 1000 });
+  const list = JSON.parse(b.read("icon-model/files.json"));
+  assert.equal(list.model.parts.length, 3);
+  assert.deepEqual(list.model.parts.map((p) => p.size), [1000, 1000, 500]);
+  const joined = Buffer.concat(list.model.parts.map((p) => readFileSync(join(b.out, "icon-model", p.path))));
+  assert.ok(joined.equals(model));
+  assert.equal(list.model.sha256, sha(model));
+  for (const p of list.model.parts) assert.equal(sha(readFileSync(join(b.out, "icon-model", p.path))), p.sha256);
+  for (const [k, f] of Object.entries(list.files)) {
+    const buf = readFileSync(join(b.out, "icon-model", f.path));
+    assert.equal(buf.length, f.size, k);
+    assert.equal(sha(buf), f.sha256, k);
+  }
+  assert.equal(list.files.wasm.path, `../${ORT_WASM}`);
+  assert.equal(b.read("icon-model/tokenizer.json"), tokenizer.toString());
+  assert.match(list.id, /^[0-9a-f]{16}$/);
+
+  const precache = precacheOf(b.read("sw.js"));
+  assert.ok(precache.includes("icon-model/files.json"));
+  assert.ok(!precache.some((u) => u.startsWith("icon-model/") && u !== "icon-model/files.json"), "model files precached");
+  assert.ok(!precache.includes(ORT_WASM));
+  for (const f of ["icon-model.js", "icon-worker.js", "icon-matcher.js", "icon-files.js", "icon-query.js", "vendor/ort/ort.wasm.bundle.min.mjs", "vendor/tokenizers.min.mjs"]) assert.ok(precache.includes(f), f);
+  rmSync(src, { recursive: true, force: true });
+});
+
+test("a new model changes the shell's cache name; the model's cache isn't one the worker's clean-up removes", () => {
+  const a = fakeModelSource();
+  const one = freshBuild(a.src, { model: a.model, tokenizer: a.tokenizer, partSize: 1000 });
+  const other = Buffer.from(a.model);
+  other[0] ^= 1;
+  const mPath = join(a.src, "icon-model", "manifest.json");
+  const manifest = JSON.parse(readFileSync(mPath, "utf8"));
+  manifest.encoder.model.sha256 = a.sha(other);
+  writeFileSync(mPath, JSON.stringify(manifest));
+  const two = freshBuild(a.src, { model: other, tokenizer: a.tokenizer, partSize: 1000 });
+  assert.notEqual(one.cache, two.cache);
+  assert.notEqual(JSON.parse(one.read("icon-model/files.json")).id, JSON.parse(two.read("icon-model/files.json")).id);
+  assert.ok(!CACHE_PREFIX.startsWith("rumbo-"));
+  assert.match(readFileSync(join(app, "sw.js"), "utf8"), /startsWith\("rumbo-"\)/);
+  rmSync(a.src, { recursive: true, force: true });
+});
+
+test("a build without the model ships no files.json, and the app treats that as no model", () => {
+  const b = freshBuild();
+  assert.ok(!b.files.includes("icon-model/files.json"));
+  assert.ok(!b.files.some((f) => f.startsWith("icon-model/model.onnx")));
 });

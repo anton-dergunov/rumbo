@@ -61,9 +61,12 @@ Sibling projects are cited by name (`agentic-org-planner/…`, `calorie-logger/�
 | KaTeX 0.19.0 | Maths in notes (woff2 fonts only; three style attributes set through the CSSOM) | MIT |
 | node-diff3 3.2.1 | 3-way merge of a file, diffs, conflict hunks | MIT |
 | fflate 0.8.3 | The "download everything" zip (only `zipSync`) | MIT |
+| onnxruntime-web 1.31.1 | The task icon model, in a worker (the WebAssembly-only build; its `.wasm` is downloaded with the model, not precached) | MIT |
+| @huggingface/tokenizers 0.2.0 | The icon model's tokenizer | Apache 2.0 |
 
 The vendored files are in `app/vendor/`, with their licences and a README saying where each came from.
 
+- **The CSP** is `'self'` plus `api.github.com`, and `'wasm-unsafe-eval'` in `script-src` for the icon model's WebAssembly. Safari has supported that keyword since 16. The model runs in a worker, but the page allows it too, in case a browser applies the page's policy to its workers.
 - Fonts and Material Symbols are self-hosted in `app/fonts/`, from their npm packages (Fontsource, `material-symbols`), with their licences beside them. The prototype still loads them from Google Fonts.
 
 ### Device testing needs HTTPS
@@ -386,17 +389,61 @@ The vault links to notes as `[[obsidian:Note name]]`: 491 links to 357 notes, al
 
 ## 7. Task icons
 
-The agenda shows an icon per task. The icons come from a cache Emacs keeps outside the vault (`~/.cache/ps-task-icons/task_cache.json`).
+The agenda shows an icon per task. **Emacs's icons are the source.** A task Emacs hasn't seen yet gets a guess from a small model on the device until Emacs's icon arrives.
 
-**A change in `agentic-org-planner`, made in a session in that repo:**
-- Whenever the cache changes, Emacs also writes it to `<vault>/.ps/task-icons.json`.
-- Emacs's normal sync then commits it. `.ps/` is already tracked in the vault (`.ps/state.el`) and is not ignored.
+### Emacs's icons
+Emacs keeps its icons in a cache outside the vault (`~/.cache/ps-task-icons/task_cache.json`).
 
-**In Rumbo:**
+**A change in `agentic-org-planner`**, briefed in `docs/plans/emacs-task-icons-brief.md`:
+- Whenever the cache changes, Emacs also writes this vault's entries to `<vault>/.ps/task-icons.json`.
+- The file is `{"tag", "inputs", "map"}`, one map entry per line.
+- Emacs's normal sync commits it. `.ps/` is already tracked (`.ps/state.el`).
+
+**In Rumbo** (`app/icon-keys.js`):
 - The file is read like any other.
-- The keys stay the same: the task's title fields as JSON, `{"title":"…"}`.
-- The bundle tag is ignored.
-- Without the file, the agenda simply shows no icons.
+- **A key is the task's fields as JSON, in Emacs's order**, built from the fields the file's `inputs` names (today `title` and `parents`):
+  - `title` as `org-get-heading t t t t` gives it: markup and cookies kept; keyword, priority, tags and `COMMENT` dropped.
+  - `parents` as `org-get-outline-path` gives it: statistics cookies removed, links shown as their description, else their target.
+- Each key in the file is parsed and written again, so JSON escaping never decides a match.
+- `""` means Emacs found no icon. It is an answer, not a gap.
+- `tools/icon-check.mjs` checks the keys against the real cache and vault (29 of 29 on 2026-11-23).
+
+### The fallback model
+**When:**
+- after the agenda is drawn, for agenda tasks with no entry in Emacs's file;
+- in one request, about a second after the draw, and never while a sync is running.
+
+**The model** is `F1@all-kd-final` from task-concept-retrieval (multilingual-e5-small, fine-tuned and distilled from Emacs's model), int8.
+- Silver nDCG@5 0.498 against the big model's 0.567.
+- It is acceptable for a guess; responsiveness matters more.
+
+**How** (`icon-query.js`, `icon-matcher.js`, `icon-worker.js`), mirroring Emacs's `org_task_icon_matcher.py`:
+- The query is `"<nearest parent>: <title>"`, org-plain, with `query: ` in front. JS reproduces Python's Unicode `\w`, `\s` and `\b`.
+- Tokens come from the XLM-R tokenizer (@huggingface/tokenizers), cut at 64.
+- One text at a time with no padding (int8 must not batch).
+- Mean pool, L2 normalize, then `dense · q + prior` over 2,862 icons.
+- The top-1 is shown when `z = (max − mean) / std` reaches the manifest's threshold (2.9951, almost every task).
+- ORT Web's WebAssembly int8 kernels round differently from native ORT: 600 of 619 golden picks agree with Python, and the rest are near-ties.
+
+**Hosting:**
+- **The repo** commits only the bundle (`app/icon-model/`: names, icon vectors, prior, manifest; 2.3 MB).
+- **The build** takes the encoder (118 MB) and tokenizer from the manifest's URLs (a pinned Hugging Face revision; Actions caches them between deploys) and checks their sha256s. It writes them into the site as parts under GitHub's 100 MiB limit, with `icon-model/files.json` listing every file's size and sha256.
+- **What is precached:** only `files.json`.
+- **The app fetches only from its own site**, so the CSP needs no new host:
+  - the parts one at a time, each checked, then the joined file checked;
+  - all of it into Cache Storage under `icon-model-<id>`, which the service worker's clean-up of `rumbo-` caches leaves alone.
+- **The download** is about 145 MB with ORT's `.wasm`, made once per model.
+
+**Memory and time:**
+- The model runs in a worker, which is ended after a minute idle, giving its memory back. In Node the session peaks near 730 MB RSS.
+- In WebKit on the Mac: load 1.1–1.6 s from the cache; one guess p50 about 25–30 ms.
+
+**Guesses:**
+- They are kept in this device's settings (`iconGuesses`, tagged with the model), so a reopen shows them without the model.
+- They are never written to the vault.
+- A guess is dropped when Emacs's icon for that task arrives, or when the task leaves the agenda.
+
+**Diagnostics** shows whether the model is on the device, times a load and ten guesses, and can remove it.
 
 ## 8. Tests
 
@@ -513,6 +560,7 @@ iOS details to carry over from calorie-logger and lectern:
    - rebase with replay and 3-way merge;
    - the conflict screen, the rescue branch, reset and zip.
 5. **Obsidian notes.**
-6. **Task icons** (the Emacs change, in its own repo) and **hardening on the devices**.
+6. **Task icons:** the Emacs change (in its own repo) and the on-device fallback model.
+7. **Hardening on the devices.**
 
 Later, as before: the calendar and time grid, situation views, more settings.

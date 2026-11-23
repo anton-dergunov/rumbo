@@ -2,7 +2,7 @@
 // network and no IndexedDB, so the first paint needs neither and tests can run it on any texts.
 
 import { parseOrg, agendaSections, countSubtree, OPEN_STATES } from "./org.js";
-import { plainText } from "./inline.js";
+import { iconKey, parseIconFile } from "./icon-keys.js";
 import { parseWorkspace, sortFolders } from "./workspace.js";
 import { isIncluded } from "./vault-files.js";
 import { countSpacing } from "./spacing.js";
@@ -53,15 +53,6 @@ export function rebuildFile(model, path, text, version) {
   return file;
 }
 
-function parseIcons(text) {
-  if (!text) return {};
-  try {
-    return JSON.parse(text).map || {};
-  } catch {
-    return {};
-  }
-}
-
 /**
  * The model, from the replica's file records `{ path, sha, text, work, readOnly }`. The agenda
  * files are the included `.org` paths; `workspace.org` and `.ps/task-icons.json` are read for
@@ -71,7 +62,7 @@ export function buildModel(records, { name = "Plans" } = {}) {
   const byRecord = new Map(records.map((r) => [r.path, r]));
   const textOf = (r) => (r.work ?? r.text ?? "");
   const ws = parseWorkspace(byRecord.has("workspace.org") ? textOf(byRecord.get("workspace.org")) : "");
-  const iconMap = parseIcons(byRecord.has(".ps/task-icons.json") ? textOf(byRecord.get(".ps/task-icons.json")) : "");
+  const icons = parseIconFile(byRecord.has(".ps/task-icons.json") ? textOf(byRecord.get(".ps/task-icons.json")) : "");
 
   const agendaRecords = records.filter((r) => isIncluded(r.path)).sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const headingById = new Map();
@@ -110,9 +101,25 @@ export function buildModel(records, { name = "Plans" } = {}) {
       const base = ref.replace(/\.org$/, "").split("/").pop().toLowerCase();
       return this.byPath.get(ref) || byBase.get(base) || null;
     },
+    // Emacs's icons (.ps/task-icons.json), keyed as Emacs keys them (icon-keys.js). `guesses` is
+    // the on-device model's map for tasks Emacs hasn't seen yet (icons.js); Emacs's answer wins,
+    // and its "" (no icon) counts as an answer.
+    icons,
+    guesses: null,
+    iconKey(h) {
+      return iconKey(h, icons.inputs);
+    },
+    /** Emacs's answer for heading `h`: an icon name, "" for none, or undefined when it has none yet. */
+    emacsIcon(h) {
+      const key = iconKey(h, icons.inputs);
+      return key == null ? undefined : icons.map.get(key);
+    },
     taskIcon(h) {
-      const key = JSON.stringify({ title: h.title });
-      return iconMap[key] || iconMap[JSON.stringify({ title: plainText(h.title) })] || null;
+      const key = iconKey(h, icons.inputs);
+      if (key == null) return null;
+      const emacs = icons.map.get(key);
+      if (emacs !== undefined) return emacs || null;
+      return this.guesses?.get(key) || null;
     },
   };
 }

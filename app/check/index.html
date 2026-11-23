@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data: blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>Rumbo · Diagnostics</title>
     <meta name="description" content="Checks that this device can run Rumbo: offline storage, the service worker, and the GitHub API." />
@@ -84,6 +84,16 @@
             <option>did nothing</option>
           </select>
         </label>
+      </section>
+
+      <section>
+        <h2>Task icon model</h2>
+        <p class="muted">The model guesses an agenda icon for a task Emacs hasn't seen yet. It downloads (about 130 MB) only when a task first needs one; this times it on this device.</p>
+        <p class="row">
+          <button type="button" id="icon-run">Load and time the model</button>
+          <button type="button" id="icon-remove" class="quiet">Remove the model</button>
+          <span id="icon-progress" class="muted"></span>
+        </p>
       </section>
 
       <section>

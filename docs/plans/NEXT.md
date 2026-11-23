@@ -20,12 +20,35 @@ The build of `real-app.md` is split into sessions, each sized to fit one context
 | 5 | 4b | Rebase (replay, then node-diff3), the conflict screen, rescue branch, reset, the zip, seeded random interleavings, `tools/e2e-github.mjs` | §3 (rebase), §4, §8 | **done** |
 | — | owner | Run `tools/e2e-github.mjs` on a throwaway repo (below) | — | **done** |
 | 6 | 5 | Obsidian notes: `notes.js`, carrel's Markdown module, wiki links, embeds, footnotes | §6 | **done** |
-| 7 | 6 | Task icons (a session in `agentic-org-planner`), the on-device fallback model (below), then hardening on the devices | §7, §9 (iOS details) | next |
+| 7 | 6 | Task icons: Rumbo reads Emacs's file (real keys), the on-device fallback model, the Emacs brief | §7 | **done** |
+| — | owner | Run the Emacs brief in a session in `agentic-org-planner` (below) | — | next |
+| 8 | 7 | Hardening on the devices, with the owner (the checklist below) | §4, §9 (iOS details) | after that |
 
 ## Later (after the sessions above)
 - **Sync details from Settings** (the owner, 2026-11-22): a way from Settings to fuller sync statistics. The Sync page is reachable from Settings already; this would add more (merge commits counted, rate-limit use, pull timings, history per file).
 
-### Session 7 in more detail: the fallback icon model (the owner, 2026-11-22)
+### Session 8 in more detail: hardening on the devices (with the owner)
+The build to test is on Pages once session 7 is committed. Update Rumbo on each device first (Settings → Update Rumbo).
+
+**Code first, before the device rounds:**
+- **Swipe is not on yet.** The settled design has swipe and edit mode on at once. But `state.edit` is only `"mode"` (`app/state.js`), and `gestures.js` picks one variant (`variant()`). Turn swipe on next to edit mode: right for Done and State, left for More and Delete, buttons at least 44 px tall. Test it in WebKit.
+- `overscroll-behavior-y: none` on the page (§9: pull-to-refresh can discard an open dialog). Only two inner scrollers have `contain` now.
+- Check the other §9 iOS details in `app/`: dialogs against `visualViewport` (`edit-ui.js` has it), a non-passive `touchmove` during a swipe, the `MacIntel` iPad test (`setup.js` has it).
+- Show the counted spacing cells in the app (§5 asks for it; `tools/spacing-report.mjs` prints them), perhaps in Diagnostics.
+
+**On the devices** (the iPad 11" first, then the iPad mini and the phone):
+- the icon model in Diagnostics → "Load and time the model": the download, load and p50 numbers, and whether the iPad mini copes with the memory (a reload or a crash of the page means it doesn't);
+- a task added on the device gets a guessed icon in the agenda a moment later;
+- a conflict and each way out on the iPad;
+- the zip's share sheet offers Files and AirDrop;
+- the Sync page's diffs soft-wrap on the phone, with real notes;
+- note pages: KaTeX fonts, images, the share of the width, a long note with several embeds (memory and scrolling);
+- "Open in Obsidian" from the note page, cold and warm;
+- swipe and edit mode on a real file.
+
+**Optional:** `app/check/check.js` keeps its own small notes index; it could use `noteIndex`.
+
+### Session 7 in more detail: the fallback icon model (the owner, 2026-11-22; done, see the hand-off)
 Emacs's icons (`.ps/task-icons.json`, §7) stay the source. A task with no entry yet gets a guess from a small model on the device. This happens, for example, after a task is added or its state changes on the phone, before Emacs has seen it. When Emacs's icon arrives with a pull, it replaces the guess. The guess is never written to the vault. Responsiveness matters more than quality here.
 
 - **Model: `F1@all-kd-final`** from task-concept-retrieval (`~/projects/research/task-concept-retrieval`). It is the best of its smallest models: multilingual-e5-small (118M), fine-tuned and distilled from the big model that Emacs runs.
@@ -66,6 +89,10 @@ Emacs's icons (`.ps/task-icons.json`, §7) stay the source. A task with no entry
 - Check the prototype's inline styles against the CSP (`style-src 'self'` forbids `style="…"` attributes in HTML; setting `el.style` from script is fine).
 - The Android report backs the plan's sizing: a first clone of the whole vault is about 1 MB in about 4 s, and polling an unchanged head is a free 304. The owner's token has no expiry; the 2060-11-01 in the Android report stood for that, before the check page had a "no expiry" box.
 - Don't trust `navigator.onLine`: on Android it said "online" with every radio off (§3, the sync engine). The Sync page's "offline" comes from the failure class of the last request.
+
+## For the owner: the Emacs brief (after session 7)
+
+Start a session in `~/projects/products/agentic-org-planner` with `docs/plans/emacs-task-icons-brief.md` from this repo (open it, or paste it in). It asks Emacs to write this vault's entries of its icon cache to `<vault>/.ps/task-icons.json`, one entry per line, only when they change. Afterwards, in this folder, run `node tools/icon-check.mjs`: it reads the real cache and vault, and says how many keys match. Until then Rumbo's agenda shows only its own guesses.
 
 ## For the owner: the end-to-end run (after session 5)
 
@@ -120,6 +147,67 @@ It shows the blank-line habit of each cell, counted from the vault, then the hea
    ```
 
 ## Hand-off
+
+### Session 7 (2026-11-23)
+**Done**
+- **Emacs's real keys.** The live bundle keys a task by `{"title", "parents"}`, not by the title alone. The old `taskIcon` would have matched nothing.
+  - `app/icon-keys.js` rebuilds the key from Rumbo's parse:
+    - the title as `org-get-heading t t t t`;
+    - the parents as `org-get-outline-path`: cookies removed, links shown as their description or target. Checked in Emacs 30 / Org 9.7.11.
+  - It re-serialises every key in the file.
+  - `data.js` has `iconKey`, `emacsIcon` (`""` is an answer) and `taskIcon` (Emacs, else the guess).
+- **`tools/icon-check.mjs`** (read-only):
+  - 29 of 29 cached keys match a heading in the real vault;
+  - all 29 agenda tasks find their icon;
+  - the JS query text equals the Python matcher's on all 2,916 open tasks.
+- **The Emacs brief:** `docs/plans/emacs-task-icons-brief.md` (format, this vault's tasks only, write only on change, atomic). The sample vault has a synthetic `.ps/task-icons.json` in that format, with 3 of its 19 agenda tasks left out.
+- **The fallback model**, int8 `F1@all-kd-final`:
+  - `app/icon-model/` holds the bundle; the manifest's URLs are pinned to HF revision `ccf900b`;
+  - vendored onnxruntime-web 1.31.1 (WebAssembly only) and @huggingface/tokenizers 0.2.0;
+  - `icon-query.js`, `icon-matcher.js`, `icon-worker.js`, `icon-files.js`, `icon-model.js` and `icons.js`, as in `CLAUDE.md`.
+  - Guesses are asked for about 1 s after the agenda is drawn, never during a sync, and kept in `settings` → `iconGuesses`.
+  - A failed download is logged once (the Sync page shows it) and retried after 1, 5, then 30 minutes.
+- **Build:**
+  - `tools/build.mjs` gets the encoder and tokenizer from `.cache/icon-model/`, `$RUMBO_ICON_MODEL_DIR` or the pinned URLs, and checks their sha256s;
+  - it writes 2 parts (95 MiB and 18 MB), `tokenizer.json` and `files.json`, and precaches only `files.json`;
+  - `--no-model` builds without it;
+  - `deploy.yml` caches `.cache/icon-model` by the manifest's hash. The download from HF was tried here: 15 s, sha256s matched.
+- **CSP:** `'wasm-unsafe-eval'` added to `script-src` on both pages (the build test allows exactly that).
+- **Diagnostics:** "Task icon model": cached or not and its size, "Load and time the model" (ten synthetic tasks), "Remove the model".
+- **Tests:** 237 with `npm install` (236 run by default; 1 opt-in). New:
+  - `icon-keys`, `icon-query`, `icons` (the file loader and the glue on fakes);
+  - `icon-model`: the query text always; the tokenizer and the model against `tests/icon-golden.json` with `RUMBO_ICON_MODEL_DIR`;
+  - build tests for the parts, `files.json`, the precache and the cache names.
+  - `tests/icon-golden.json` holds Python's answers for the 608 sample-vault tasks and 11 written ones, made by `tools/icon-golden.mjs` (with `uv`).
+- **Checked in WebKit** (served under `/rumbo/` against the fake GitHub):
+  - no model request before the first paint;
+  - the three missing tasks got guesses 3.2 s after it;
+  - a reload showed them with no model request;
+  - an Emacs push of one icon replaced its guess, and the guess was dropped;
+  - screenshots at the three sizes.
+  - Diagnostics with the service worker: 145 MB downloaded, model loaded in 1.1–1.6 s, one guess p50 25–31 ms (p95 51–84 ms); offline from Cache Storage, a load in 1.0 s; "Remove" leaves only the shell's cache.
+  - No console errors besides Playwright's own screenshot stylesheet.
+
+**Findings and decisions**
+- **int8, not fp16.** fp16 runs on ORT Web's WebAssembly too (36 ms against 25 ms per guess in Node), but it is twice the download and memory, and the owner accepted int8 for a fallback.
+- **ORT Web's int8 kernels round differently from native ORT.** 600 of the 619 golden picks agree with Python, and the rest are near-ties (|Δz| at most 0.3).
+  - Python's ORT 1.30 and 1.31 agree on all 619, and the graph optimization level changes nothing.
+  - The test's bar is 95% and |Δz| < 0.5. The tokenizer agrees on all 630 strings.
+- **Memory:** in Node the int8 session peaks near 730 MB RSS (the model's bytes plus the WebAssembly heap). The worker is ended after 60 s idle. The iPad mini is the risk; session 8 measures it.
+- **The model's cache is `icon-model-<id>`,** because `sw.js` deletes every other `rumbo-` cache on update. The `.wasm` (15 MB) is fetched with the model, not precached.
+- **The Emacs cache is shared by every vault** in the registry, so the brief requires writing only this vault's entries. Otherwise other vaults' task titles would land in this repo.
+- **Guesses are keyed by Emacs's key**, so Emacs's icon for the same task simply wins. Guesses for tasks that left the agenda are let go, so the stored map stays small.
+- A model that abstains is stored as `""` and not asked again. At the threshold (≈3.0) that is rare.
+- **Testing notes:**
+  - a dedicated worker's fetches go straight to the scratch server (no routes needed);
+  - `isCached` must use `caches.has` (`open` creates the cache);
+  - the Diagnostics check must await its cache look before a reload, or WebKit reports "Context is stopped".
+
+**Left for later sessions**
+- The owner: run the Emacs brief (above). Then `node tools/icon-check.mjs` should report this vault's file keys matching.
+- Session 8: the checklist above.
+- Later, in task-concept-retrieval: vocabulary trimming (118M → ~35M parameters) would cut the download about three times.
+- `tools/icon-check.mjs` doesn't yet compare JS guesses with Python's on the real vault; the golden test covers that on synthetic tasks.
 
 ### Session 6 (2026-11-22)
 **Done**

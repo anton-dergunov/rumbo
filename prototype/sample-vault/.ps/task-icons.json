@@ -1,0 +1,17 @@
+{"tag":"F1-df69a05fab6d","inputs":["title","parents"],"map":{
+"{\"title\":\"Define long-term specialization strategy\",\"parents\":[\"Career Vision\"]}":"strategy",
+"{\"title\":\"Improve architecture presentation skills\",\"parents\":[\"Communication Skills\"]}":"person_play",
+"{\"title\":\"Prepare for systems interview\",\"parents\":[\"Priorities\"]}":"communication",
+"{\"title\":\"Follow the easy-pace-only rule for a month\",\"parents\":[\"Running\"]}":"do_not_step",
+"{\"title\":\"Morning planning block before opening email\",\"parents\":[\"Daily\"]}":"calendar_lock",
+"{\"title\":\"Build static site preview pipeline\",\"parents\":[\"Publishing Workflow\"]}":"preview",
+"{\"title\":\"Map current strengths and weaknesses\",\"parents\":[\"Career Vision\"]}":"person_play",
+"{\"title\":\"Evaluation improvements\",\"parents\":[\"Mixed States\",\"Active long-term effort\"]}":"update",
+"{\"title\":\"Build toy coding agent\",\"parents\":[\"Learning Projects\"]}":"robot_2",
+"{\"title\":\"Create simple monthly review template\",\"parents\":[\"Expense Tracking\"]}":"contextual_token_add",
+"{\"title\":\"Renew the home insurance before it lapses\",\"parents\":[\"Admin\"]}":"shield_with_house",
+"{\"title\":\"Solve one math problem daily\",\"parents\":[\"Problem Solving\"]}":"calculate",
+"{\"title\":\"Weekly review every Friday afternoon\",\"parents\":[\"Weekly\"]}":"date_range",
+"{\"title\":\"Build toy retrieval pipeline from scratch in *PyTorch*\",\"parents\":[\"Technical Skills\",\"Machine Learning\"]}":"mitre",
+"{\"title\":\"Create reusable article structure\",\"parents\":[\"Communication Skills\",\"Technical Writing\"]}":"format_paragraph",
+"{\"title\":\"Prepare architecture presentation\",\"parents\":[\"Career Tracking\",\"Interviews\"]}":"co_present"}}

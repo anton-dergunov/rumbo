@@ -34,6 +34,13 @@ jobs:
         run: git ls-files 'app/*.js' 'app/**/*.js' | xargs -n1 node --check
       - run: node --test "tests/*.test.mjs"
       - run: python -m unittest discover tests
+      # The task icon model's encoder (118 MB) isn't in the repo: the build downloads it from the
+      # URLs in app/icon-model/manifest.json and checks its sha256. The cache keeps it between deploys.
+      - name: Keep the icon model between deploys
+        uses: actions/cache@v4
+        with:
+          path: .cache/icon-model
+          key: icon-model-${{ hashFiles('app/icon-model/manifest.json') }}
       - run: node tools/build.mjs
       - run: git diff --check
       - uses: actions/upload-pages-artifact@v3

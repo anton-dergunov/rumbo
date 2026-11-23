@@ -1,0 +1,51 @@
+{
+  "tag": "F1-8ca7eafc078b",
+  "format": 1,
+  "method": "F1",
+  "source": "task-concept-retrieval@750e87fe",
+  "descriptions": "v2",
+  "icons": "names.txt",
+  "encoder": {
+    "name": "F1@all-kd-final (fine-tuned intfloat/multilingual-e5-small, ONNX int8)",
+    "model": {
+      "url": "https://huggingface.co/AntonDergunov/task-icon-encoder-e5-small-interim/resolve/ccf900b49696db4f2cf017d929dcaaa430bbbeca/model_int8.onnx",
+      "sha256": "67f6851263903fd0a73c2cfafdf500394ff5cc96700c36d42a7f74318ff7259c",
+      "size": 118073663
+    },
+    "tokenizer": {
+      "url": "https://huggingface.co/AntonDergunov/task-icon-encoder-e5-small-interim/resolve/ccf900b49696db4f2cf017d929dcaaa430bbbeca/tokenizer.json",
+      "sha256": "0e3a6c157b648e1e77dd87eba6b09ea06cc89af71c7d3725bb4bae4415781d76",
+      "size": 9581585
+    },
+    "query_prefix": "query: ",
+    "max_length": 64
+  },
+  "query": {
+    "inputs": [
+      "title",
+      "parents"
+    ],
+    "normalize": "org-plain",
+    "body_chars": 400
+  },
+  "dense": {
+    "matrix": "dense.npy",
+    "prior": "prior.npy"
+  },
+  "bm25": null,
+  "fusion": {
+    "rrf_k": 60,
+    "pool": 50,
+    "threshold": 2.9951
+  },
+  "gate": {
+    "min_prob": 0.2,
+    "fitted_on": "silver dev 2026-11-22-extra, F1@all-kd-final.v2+parent, 3230 tasks, acceptable = judge grade >= 2",
+    "platt": [
+      1.0961,
+      -4.6693
+    ],
+    "coverage": 0.999,
+    "precision": 0.66
+  }
+}

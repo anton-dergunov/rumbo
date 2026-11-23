@@ -365,6 +365,76 @@ function renderReport() {
   $("#report").value = lines.join("\n");
 }
 
+// ---------------------------------------------------------------------------------------------
+// The task icon model (real-app.md §7): is it here, how long it takes to load and to guess.
+
+const SAMPLE_TASKS = [
+  { title: "Book a dentist appointment", parents: ["Health"] },
+  { title: "Renew the passport", parents: ["Travel"] },
+  { title: "Pay the council tax", parents: ["Money"] },
+  { title: "Read the attention paper again", parents: ["Papers"] },
+  { title: "Fix the flaky build", parents: ["Work"] },
+  { title: "Buy apples and bread", parents: ["Errands"] },
+  { title: "Llamar al fontanero", parents: ["Casa"] },
+  { title: "Купить билеты на поезд", parents: ["Поездки"] },
+  { title: "Practise the guitar piece", parents: ["Music"] },
+  { title: "Back up the photos", parents: ["Photos"] },
+];
+let iconModel = null;
+const mb = (n) => `${(n / 1e6).toFixed(0)} MB`;
+
+async function loadIconModel() {
+  if (!iconModel) iconModel = (await import("../icon-model.js")).createIconModel();
+  return iconModel;
+}
+
+let cachedSeq = 0;
+async function iconCachedCheck() {
+  const mine = ++cachedSeq; // only the latest look reports, when several overlap
+  const m = await loadIconModel();
+  const list = await m.list().catch(() => null);
+  if (mine !== cachedSeq) return;
+  if (!list) return report("icon-cached", "Task icon model on this device", "info", "this build has none");
+  const size = await m.size();
+  if (mine !== cachedSeq) return;
+  report("icon-cached", "Task icon model on this device", "info", size ? `yes, ${mb(size)} (${list.tag})` : `no; ${list.tag} is ${mb(m.totalSize(list))} to download`);
+}
+
+async function iconRun() {
+  const m = await loadIconModel();
+  const off = m.onProgress((done, total) => ($("#icon-progress").textContent = `Downloading ${mb(done)} of ${mb(total)}…`));
+  report("icon-run", "Task icon model loads and guesses", "wait");
+  const t0 = performance.now();
+  try {
+    const tasks = SAMPLE_TASKS.map((t, i) => ({ key: String(i), ...t }));
+    const r = await m.guess(tasks);
+    const st = r.stats;
+    const enc = [...st.encodeMs].slice(-tasks.length).sort((a, b) => a - b);
+    const p = (q) => enc[Math.min(enc.length - 1, Math.floor(q * enc.length))];
+    const picks = tasks.map((t) => `${t.title} → ${r.guesses[t.key] || "none"}`).join("; ");
+    const mem = performance.memory ? `; JS heap ${mb(performance.memory.usedJSHeapSize)}` : "";
+    report(
+      "icon-run",
+      "Task icon model loads and guesses",
+      "pass",
+      `${st.fetched ? `downloaded ${mb(st.fetched)}, ` : "from the cache, "}files ${secs(st.filesMs)}, model ${secs(st.loadMs)}, first answer ${secs(performance.now() - t0)}; one guess p50 ${p(0.5)} ms, p95 ${p(0.95)} ms${mem}. ${picks}`,
+    );
+  } catch (e) {
+    report("icon-run", "Task icon model loads and guesses", "fail", errorText(e));
+  } finally {
+    off();
+    $("#icon-progress").textContent = "";
+    await iconCachedCheck().catch(() => {});
+  }
+}
+
+async function iconRemove() {
+  const m = await loadIconModel();
+  await m.remove();
+  checks.delete("icon-run");
+  await iconCachedCheck();
+}
+
 async function run() {
   const s = readForm();
   await kv.set("settings", s);
@@ -395,6 +465,9 @@ async function main() {
     report("idb", "IndexedDB keeps data between opens", "fail", errorText(e));
   }
   renderOpens();
+  $("#icon-run").addEventListener("click", () => iconRun());
+  $("#icon-remove").addEventListener("click", () => iconRemove().catch((e) => report("icon-cached", "Task icon model on this device", "fail", errorText(e))));
+  iconCachedCheck().catch((e) => report("icon-cached", "Task icon model on this device", "fail", errorText(e)));
   await storageChecks(opens).catch((e) => report("persist", "Persistent storage", "fail", errorText(e)));
   updateObsidianLink();
 

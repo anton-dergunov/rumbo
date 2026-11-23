@@ -176,7 +176,11 @@ function logLine(e) {
                 ? `Pushed ${e.commits} local commit${e.commits === 1 ? "" : "s"} to the branch ${e.branch} (${short(e.sha)})`
                 : e.kind === "resolve"
                   ? `${fileLabel(e.path)}: kept ${e.how === "mine" ? "this device's text" : "GitHub's text"}`
-                  : JSON.stringify(e);
+                  : e.kind === "icons"
+                    ? e.error
+                      ? `The task icon model could not be loaded: ${e.error}`
+                      : `Downloaded the task icon model (${Math.round(e.fetched / 1e6)} MB in ${Math.round(e.ms / 1000)} s)`
+                    : JSON.stringify(e);
   return h("li", null, h("span", { class: "muted" }, when(e.at)), " ", text);
 }
 
