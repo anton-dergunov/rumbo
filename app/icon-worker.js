@@ -17,7 +17,7 @@ const stats = { fetched: 0, filesMs: 0, loadMs: 0, encodeMs: [] };
 function matcher() {
   ready ||= (async () => {
     const t0 = performance.now();
-    const { files, fetched } = await loadModelFiles({ base, onProgress: (done, total) => self.postMessage({ type: "progress", done, total }) });
+    const { files, fetched } = await loadModelFiles({ base });
     const t1 = performance.now();
     const m = await createMatcher({ ort, Tokenizer, files });
     Object.assign(stats, { fetched, filesMs: Math.round(t1 - t0), loadMs: Math.round(performance.now() - t1) });

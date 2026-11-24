@@ -16,7 +16,7 @@ stays in its own git repository on GitHub, and Emacs on the desktop keeps workin
 - `app/`: the installable app. It keeps a copy of the vault on the device and works offline, shows
   the agenda and every plan file, and edits tasks with a swipe or in an edit mode. Each edit is a git
   commit sent to the vault's repository on GitHub, and changes from the desktop are woven in. Linked
-  Obsidian notes open inside the app, and agenda tasks get icons. Diagnostics checks a device.
+  Obsidian notes open inside the app, and agenda tasks get icons.
 - `docs/plans/real-app.md`: how the app is built.
 
 ## Run

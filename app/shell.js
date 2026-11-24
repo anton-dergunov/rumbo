@@ -61,13 +61,6 @@ function settingsSheet() {
       h("div", { class: `set-row set-static${token.warn ? " warn" : ""}` }, icon("key"), h("span", { class: "set-txt" }, h("span", null, "Token"), h("span", { class: "muted" }, token.text))),
       h("div", { class: "set-row set-static" }, icon("devices"), h("span", { class: "set-txt" }, h("span", null, "This device"), h("span", { class: "muted" }, `${m.device || "—"}: the name in commit messages`))),
       h("h4", { class: "set-label" }, "About"),
-      h(
-        "a",
-        { class: "set-row", href: "check/" },
-        icon("monitor_heart"),
-        h("span", { class: "set-txt" }, h("span", null, "Diagnostics"), h("span", { class: "muted" }, "The device check")),
-        icon("chevron_right"),
-      ),
       h("div", { class: "set-row set-static" }, icon("info"), h("span", { class: "set-txt" }, h("span", null, "Version"), h("span", { class: "muted" }, `${VERSION} (${BUILD})`))),
     ),
   );

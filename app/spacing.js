@@ -192,7 +192,7 @@ export function predict(rule, cell) {
 }
 
 /**
- * The counted cells as rows, for the spacing report and Diagnostics: [{cell, total, counts:
+ * The counted cells as rows, for the spacing report: [{cell, total, counts:
  * [[value, n]], rule, share, fallback}]. `rule` is what the rule puts there (null = keep, too few
  * examples), `share` the majority's percentage, `fallback` the built-in default a kept cell has.
  */

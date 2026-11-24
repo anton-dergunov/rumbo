@@ -56,7 +56,7 @@ test("the whole shell is precached, pages under their directory URLs, the worker
   assert.ok(!precache.some((u) => u.endsWith("index.html")));
   assert.ok(!precache.some((u) => /404/.test(u)));
   assert.ok(!precache.includes("sw.js"));
-  assert.equal(precacheUrl("check/index.html"), "check/");
+  assert.equal(precacheUrl("sub/index.html"), "sub/");
   assert.doesNotThrow(() => new Function(sw));
 });
 
@@ -101,22 +101,18 @@ test("the unbuilt worker is valid and precaches nothing", () => {
   rmSync(src, { recursive: true, force: true });
 });
 
-test("the Diagnostics page lives at check/, and the self-hosted fonts are precached", () => {
+test("the self-hosted fonts are precached", () => {
   const b = freshBuild();
   const precache = precacheOf(b.read("sw.js"));
-  assert.ok(precache.includes("check/"));
   assert.ok(precache.includes("fonts/fonts.css"));
   assert.ok(precache.includes("fonts/material-symbols-outlined.woff2"));
   for (const m of b.read("fonts/fonts.css").matchAll(/url\(([^)]+)\)/g)) assert.ok(b.files.includes(`fonts/${m[1]}`), m[1]);
-  assert.match(b.read("check/index.html"), /href="\.\.\/manifest\.webmanifest"/);
 });
 
-test("both pages turn off vertical overscroll on the root, so pull-to-refresh can't discard a dialog", () => {
-  const b = freshBuild();
-  for (const css of ["app.css", "check/check.css"]) {
-    const root = [...b.read(css).replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g)].filter((m) => m[1].split(",").some((sel) => /^(html|body)$/.test(sel.trim())));
-    assert.ok(root.some((m) => /overscroll-behavior-y:\s*none/.test(m[2])), css);
-  }
+test("the page turns off vertical overscroll on the root, so pull-to-refresh can't discard a dialog", () => {
+  const css = freshBuild().read("app.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const root = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter((m) => m[1].split(",").some((sel) => /^(html|body)$/.test(sel.trim())));
+  assert.ok(root.some((m) => /overscroll-behavior-y:\s*none/.test(m[2])));
 });
 
 test("the note libraries are precached, and KaTeX's stylesheet names only fonts that ship", () => {
@@ -134,7 +130,7 @@ test("the note libraries are precached, and KaTeX's stylesheet names only fonts 
 test("every page's CSP allows only itself and api.github.com, and no HTML uses style attributes", () => {
   const b = freshBuild();
   const pages = b.files.filter((f) => f.endsWith(".html"));
-  assert.deepEqual(pages.sort(), ["check/index.html", "index.html"]);
+  assert.deepEqual(pages, ["index.html"]);
   for (const f of pages) {
     const html = b.read(f);
     const csp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1];

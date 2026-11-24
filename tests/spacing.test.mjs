@@ -91,7 +91,7 @@ test("predict: the majority with 5 examples or more, else keep; the default befo
   assert.deepEqual(cellSummary({ cells: { l1: { 0: 2, 1: 9, 2: 1 } } }, "l1"), { total: 12, best: 1, bestCount: 9 });
 });
 
-test("the table of cells, as Diagnostics and the report show it", () => {
+test("the table of cells, as the spacing report shows it", () => {
   const rows = spacingTable({ cells: { l1: { 1: 9, 0: 1 }, "parent-prose": { 1: 2 } }, files: 1 });
   assert.deepEqual(rows.map((r) => r.cell), CELLS, "every cell, in order");
   assert.deepEqual(rows[0], { cell: "l1", total: 10, counts: [[0, 1], [1, 9]], rule: 1, share: 90, fallback: 1 });

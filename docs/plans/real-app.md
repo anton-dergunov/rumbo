@@ -330,7 +330,7 @@ Rumbo adopts the Emacs model instead (`agentic-org-planner/lisp/ps-blank-lines-t
   - Why sections apart: a section after its sibling starts a new part (21 of 21 have a blank line), a task after a task almost never does (3 of 2,350).
   - The counts after the review: a blank line before 277 of 277 level-1 headings, 209 of 209 first children after their parent's text, 215 of 215 headings after a closed subtree with notes (6 of 7 without), 21 of 21 sections after a sibling; 3 of 2,405 tasks after a task. Only boundary gaps are counted, never leads. A cell needs at least 5 examples to be used; a tie goes to the built-in default.
 - The built-in default, used before the counts exist, is the rule above.
-- Settings → Diagnostics shows the counted cells from the device's replica (`spacingTable` in `spacing.js`, which `tools/spacing-report.mjs` prints too).
+- `tools/spacing-report.mjs` prints the counted cells (`spacingTable` in `spacing.js`).
 - No spacing setting is stored separately in the app: the vault is the setting.
 
 ### Spacing review
@@ -443,7 +443,7 @@ Emacs keeps its icons in a cache outside the vault (`~/.cache/ps-task-icons/task
 - They are never written to the vault.
 - A guess is dropped when Emacs's icon for that task arrives, or when the task leaves the agenda.
 
-**Diagnostics** shows whether the model is on the device, times a load and ten guesses, and can remove it.
+**On the devices** (2026-11-24, int8, measured with the since-removed Diagnostics page): one guess p50 23 ms on the iPad Air 11", 22 ms on the iPad mini (which held the model's memory) and 67 ms on the Android phone.
 
 ## 8. Tests
 
@@ -534,7 +534,7 @@ iOS details to carry over from calorie-logger and lectern:
 - detect an iPad from `MacIntel` plus touch points;
 - turn off `overscroll-behavior-y`, because pull-to-refresh can discard an open dialog.
 
-All four are in `app/`: `edit-ui.js` (the keyboard), `gestures.js` (the swipe), `setup.js` and the check page (the iPad), and the root of `app.css` and `check.css` (overscroll).
+All four are in `app/`: `edit-ui.js` (the keyboard), `gestures.js` (the swipe), `setup.js` (the iPad), and the root of `app.css` (overscroll).
 
 ## 10. Order of work
 
@@ -563,6 +563,8 @@ All four are in `app/`: `edit-ui.js` (the keyboard), `gestures.js` (the swipe), 
    - the conflict screen, the rescue branch, reset and zip.
 5. **Obsidian notes.**
 6. **Task icons:** the Emacs change (in its own repo) and the on-device fallback model.
-7. **Hardening on the devices:** swipe beside edit mode, the iOS details of §9, the counted cells in Diagnostics, then the owner's round on the devices.
+7. **Hardening on the devices:** swipe beside edit mode, the iOS details of §9, then the owner's round on the devices (all passed, 2026-11-24). The device-check page was removed afterwards.
+
+All steps were done by 2026-11-24.
 
 Later, as before: the calendar and time grid, situation views, more settings.

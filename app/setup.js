@@ -19,7 +19,7 @@ const field = (label, input) => h("label", { class: "su-field" }, h("span", null
 const text = (name, value, attrs = {}) => h("input", { name, value: value || "", spellcheck: "false", autocapitalize: "off", autocomplete: "off", ...attrs });
 
 /**
- * The form. `values` prefills it (from an earlier Setup, or the device check's saved settings).
+ * The form. `values` prefills it (from an earlier Setup).
  * `onSubmit(values, say)` runs the setup; `say(text, kind)` shows progress or an error under it.
  */
 export function renderSetup(values, onSubmit) {

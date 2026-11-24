@@ -35,9 +35,9 @@
   --font-read: "Literata", "Iowan Old Style", Charter, Georgia, serif;
   --font-ui: "IBM Plex Sans", -apple-system, "Helvetica Neue", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --fs-read: 17px;
+  --fs-read: calc(17px - var(--fs-down, 0px));
   --lh-read: 1.62;
-  --fs-ui: 15px;
+  --fs-ui: calc(15px - var(--fs-down, 0px));
   --row-pad: 9px;
   --radius: 12px;
   --shadow: 0 1px 2px rgb(60 45 20 / 0.06), 0 6px 20px rgb(60 45 20 / 0.06);
@@ -83,9 +83,9 @@
   --font-read: "Inter", -apple-system, system-ui, sans-serif;
   --font-ui: "Inter", -apple-system, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --fs-read: 15.5px;
+  --fs-read: calc(15.5px - var(--fs-down, 0px));
   --lh-read: 1.55;
-  --fs-ui: 14.5px;
+  --fs-ui: calc(14.5px - var(--fs-down, 0px));
   --row-pad: 7px;
   --radius: 10px;
   --shadow: 0 1px 2px rgb(20 30 50 / 0.06), 0 6px 18px rgb(20 30 50 / 0.06);
@@ -131,9 +131,9 @@
   --font-read: "Literata", "Iowan Old Style", Charter, Georgia, serif;
   --font-ui: "IBM Plex Sans", -apple-system, "Helvetica Neue", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --fs-read: 17px;
+  --fs-read: calc(17px - var(--fs-down, 0px));
   --lh-read: 1.62;
-  --fs-ui: 15px;
+  --fs-ui: calc(15px - var(--fs-down, 0px));
   --row-pad: 9px;
   --radius: 12px;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.25);
@@ -179,9 +179,9 @@
   --font-read: "Inter", -apple-system, system-ui, sans-serif;
   --font-ui: "Inter", -apple-system, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --fs-read: 15.5px;
+  --fs-read: calc(15.5px - var(--fs-down, 0px));
   --lh-read: 1.55;
-  --fs-ui: 14.5px;
+  --fs-ui: calc(14.5px - var(--fs-down, 0px));
   --row-pad: 7px;
   --radius: 10px;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.3);
@@ -192,4 +192,10 @@
   --toast-ink: #121519;
   --toast-act: #3156c8;
   --scrim: rgb(0 0 0 / 0.55);
+}
+
+/* Android draws the same text a little larger, so the reading and UI sizes there are 1px smaller
+   (the owner, 2026-11-24). app.js marks the root. */
+:root.android {
+  --fs-down: 1px;
 }

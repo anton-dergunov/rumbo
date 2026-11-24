@@ -19,6 +19,9 @@ import { startPwa, onStatus as onPwaStatus, applyUpdate } from "./pwa.js";
 import { createIconModel } from "./icon-model.js";
 import { createIcons } from "./icons.js";
 
+// Android's text is a touch larger at the same size; tokens.css takes 1px off there.
+if (/Android/i.test(navigator.userAgent)) document.documentElement.classList.add("android");
+
 const viewport = document.getElementById("viewport");
 // The app redraws into its own root; the editing layer beside it (dialogs, menus, the toast) is
 // never redrawn, so a dialog keeps its text and the keyboard while the page under it changes.
@@ -329,38 +332,6 @@ let md = null; // markdown.js, loaded with the first note
 
 // ---------------------------------------------------------------- setup
 
-/** What the device check saved on this device (its own database), to prefill Setup once. */
-function checkPageSettings() {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), 2000);
-    const done = (v) => (clearTimeout(timer), resolve(v));
-    let req;
-    try {
-      req = indexedDB.open("rumbo-check");
-    } catch {
-      return done(null);
-    }
-    // No such database: don't create one.
-    req.onupgradeneeded = () => req.transaction.abort();
-    req.onerror = () => done(null);
-    req.onsuccess = () => {
-      const db = req.result;
-      try {
-        const get = db.transaction("kv").objectStore("kv").get("settings");
-        get.onsuccess = () => {
-          db.close();
-          const s = get.result;
-          done(s ? { repo: s.vaultRepo, branch: s.branch, token: s.token, tokenExpiry: s.tokenExpiry, noExpiry: s.tokenNoExpiry, notesRepo: s.notesRepo, obsidianVault: s.obsidianVault } : null);
-        };
-        get.onerror = () => (db.close(), done(null));
-      } catch {
-        db.close();
-        done(null);
-      }
-    };
-  });
-}
-
 async function showSetup(values) {
   engine?.stop();
   appRoot.replaceChildren(renderSetup(values, runSetup));
@@ -530,7 +501,7 @@ async function boot() {
   applyTheme();
   runtime.meta = meta;
   await icons.load();
-  if (!meta.repo || !meta.token) return showSetup({ ...(await checkPageSettings()), ...meta });
+  if (!meta.repo || !meta.token) return showSetup(meta);
 
   model = buildModel(await store.allFiles(), { name: repoName(meta) });
   runtime.pending = await store.pending().catch(() => []);
@@ -542,3 +513,9 @@ async function boot() {
 }
 
 boot();
+
+// The device check page is gone; its database held a copy of the token. Deleting a database that
+// isn't there is a no-op.
+try {
+  indexedDB.deleteDatabase("rumbo-check");
+} catch {}
