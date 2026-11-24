@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseOrg } from "../app/org.js";
-import { partition, reassemble, cellOf, countSpacing, predict, cellSummary, boundaryGaps, edgeMemory, mergeMemory, DEFAULT_RULE, CELLS } from "../app/spacing.js";
+import { partition, reassemble, cellOf, countSpacing, predict, cellSummary, boundaryGaps, edgeMemory, mergeMemory, spacingTable, DEFAULT_RULE, CELLS } from "../app/spacing.js";
 
 function sampleFiles() {
   const root = new URL("../prototype/sample-vault/", import.meta.url).pathname;
@@ -89,6 +89,17 @@ test("predict: the majority with 5 examples or more, else keep; the default befo
   assert.equal(predict({ cells: { "sibling-bare": { 0: 3, 1: 3 } } }, "sibling-bare"), 0, "a tie goes to the default");
   assert.equal(predict({ cells: { l1: { 1: 3, 2: 3 } } }, "l1"), 1);
   assert.deepEqual(cellSummary({ cells: { l1: { 0: 2, 1: 9, 2: 1 } } }, "l1"), { total: 12, best: 1, bestCount: 9 });
+});
+
+test("the table of cells, as Diagnostics and the report show it", () => {
+  const rows = spacingTable({ cells: { l1: { 1: 9, 0: 1 }, "parent-prose": { 1: 2 } }, files: 1 });
+  assert.deepEqual(rows.map((r) => r.cell), CELLS, "every cell, in order");
+  assert.deepEqual(rows[0], { cell: "l1", total: 10, counts: [[0, 1], [1, 9]], rule: 1, share: 90, fallback: 1 });
+  assert.deepEqual(rows.find((r) => r.cell === "parent-prose"), { cell: "parent-prose", total: 2, counts: [[1, 2]], rule: null, share: null, fallback: 1 }, "too few: keep");
+  assert.deepEqual(rows.find((r) => r.cell === "parent-bare"), { cell: "parent-bare", total: 0, counts: [], rule: null, share: null, fallback: 0 });
+  // On the sample vault the table holds exactly what countSpacing counted.
+  const rule = countSpacing(sampleFiles().map((f) => parseOrg(readFileSync(f, "utf8"))));
+  for (const r of spacingTable(rule)) assert.equal(r.total, Object.values(rule.cells[r.cell] || {}).reduce((a, b) => a + b, 0), r.cell);
 });
 
 test("the edge memory: runs by the neighbours' identities, none through a heading that isn't unique", () => {

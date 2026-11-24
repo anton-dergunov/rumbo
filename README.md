@@ -5,18 +5,19 @@ headings.
 
 Rumbo is a calm planner for an Org-mode vault, made for the iPad (11" and mini) and a large Android
 phone. It shows the vault as folders of plan files, each file as a foldable outline, and an agenda
-of what is in progress, high priority and next up. It is being built to work offline, to edit tasks
-with a swipe or in an edit mode, and to keep every blank line and every byte of a file that wasn't
-edited. The vault stays in its own git repository on GitHub, and Emacs on the desktop keeps working
-alongside it.
+of what is in progress, high priority and next up. It works offline, edits tasks with a swipe or in
+an edit mode, and keeps every blank line and every byte of a file that wasn't edited. The vault
+stays in its own git repository on GitHub, and Emacs on the desktop keeps working alongside it.
 
 ## Status
 
 - `prototype/`: switchable HTML mock-ups of the layout, outline, agenda and editing designs, run
   against a local vault. The design is settled.
-- `app/`: the installable app, built in steps. For now it is a device check: it confirms that a
-  tablet or phone can install the app, work offline and reach the vault's repository on GitHub.
-- `docs/plans/real-app.md`: how the app is built, and `docs/plans/NEXT.md`: what comes next.
+- `app/`: the installable app. It keeps a copy of the vault on the device and works offline, shows
+  the agenda and every plan file, and edits tasks with a swipe or in an edit mode. Each edit is a git
+  commit sent to the vault's repository on GitHub, and changes from the desktop are woven in. Linked
+  Obsidian notes open inside the app, and agenda tasks get icons. Diagnostics checks a device.
+- `docs/plans/real-app.md`: how the app is built.
 
 ## Run
 

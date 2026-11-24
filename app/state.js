@@ -12,8 +12,7 @@ export const FOLDS = ["overview", "tasks", "all"];
 export const state = {
   theme: "paper",
   nav: "rail",
-  edit: "mode", // the edit-mode way in; swipe joins it with the write path (plan step 4)
-  editing: false, // edit mode is on (the "mode" variant); kept in the URL but not a history entry
+  editing: false, // edit mode is on (swipe works either way); kept in the URL but not a history entry
   fold: "tasks",
   file: null, // vault-relative path of the open file
   view: "agenda", // what the main area shows: a view ("agenda"; later calendar, situations), "file", "sync" or "note"

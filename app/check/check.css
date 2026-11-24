@@ -173,3 +173,31 @@ a {
   font-size: 14px;
   overflow-wrap: anywhere;
 }
+
+.cells {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.cells th,
+.cells td {
+  padding: 5px 8px 5px 0;
+  border-top: 1px solid var(--rule-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.cells th {
+  border-top: 0;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+.cells td:first-child {
+  white-space: nowrap;
+}
+
+.cells td:nth-child(2) {
+  font-variant-numeric: tabular-nums;
+}

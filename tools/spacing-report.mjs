@@ -6,7 +6,7 @@
 //   node tools/spacing-report.mjs [--vault DIR] [--file PATH]
 
 import { parseOrg } from "../app/org.js";
-import { countSpacing, boundaryGaps, cellSummary, predict, CELLS, DEFAULT_RULE, MIN_SAMPLES } from "../app/spacing.js";
+import { countSpacing, boundaryGaps, predict, spacingTable, MIN_SAMPLES } from "../app/spacing.js";
 import { args, readVault } from "./vault.mjs";
 
 const USAGE = "Usage: node tools/spacing-report.mjs [--vault DIR] [--file PATH]\nThe vault defaults to $PS_ORG_BASE, then :current in ~/.emacs.d/vaults.eld.";
@@ -20,12 +20,10 @@ export function spacingReport(files, only = null) {
   const out = [];
   out.push(`${rule.files} files. A blank line before a heading, by cell (a cell is used from ${MIN_SAMPLES} examples):`, "");
   out.push(`${"cell".padEnd(22)}${"examples".padStart(9)}  ${"blank lines: count".padEnd(26)}rule`);
-  for (const cell of CELLS) {
-    const s = cellSummary(rule, cell);
-    const counts = Object.entries(rule.cells[cell] || {}).map(([v, n]) => `${v}: ${n}`).join(", ");
-    const p = predict(rule, cell);
-    const why = s.total ? (p == null ? `keep (too few; default ${DEFAULT_RULE[cell]})` : `${p}  (${Math.round((100 * s.bestCount) / s.total)}%)`) : "—";
-    out.push(`${cell.padEnd(22)}${String(s.total).padStart(9)}  ${(counts || "—").padEnd(26)}${why}`);
+  for (const r of spacingTable(rule)) {
+    const counts = r.counts.map(([v, n]) => `${v}: ${n}`).join(", ");
+    const why = r.total ? (r.rule == null ? `keep (too few; default ${r.fallback})` : `${r.rule}  (${r.share}%)`) : "—";
+    out.push(`${r.cell.padEnd(22)}${String(r.total).padStart(9)}  ${(counts || "—").padEnd(26)}${why}`);
   }
   const against = [];
   let fit = 0;

@@ -9,6 +9,14 @@
 // it. Any other repo is refused before anything is written. The token needs Contents read and
 // write on it; it is passed to git through GIT_ASKPASS and is never printed. The sample vault is
 // written as an ordinary commit (never a force-push), so the repo's history grows with each run.
+//
+// Rerun it after changing remote-github.js, sync.js, merge.js or rescue.js. To set it up:
+//   1. make an empty private repo on GitHub, e.g. `rumbo-e2e` (no README: it must be empty);
+//   2. make a fine-grained token for that repo only, with Contents read and write and a short expiry;
+//   3. `npm install`, then run the command above. It prints PASS or FAIL for each step: the clone, a
+//      Rumbo push git pulls byte for byte, an Emacs push Rumbo pulls, both editing one file, a rescue
+//      branch, and every file agreeing at the end;
+//   4. delete the repo when done.
 
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync, chmodSync } from "node:fs";

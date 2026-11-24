@@ -10,6 +10,7 @@ html,
 body {
   margin: 0;
   height: 100%;
+  overscroll-behavior-y: none; /* pull-to-refresh would discard an open dialog (real-app.md §9) */
   background: var(--bg);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -1397,14 +1398,11 @@ hr {
 
 /* ------------------------------------------------------------ the file page while editing */
 
-.doc.g-press .head,
-.doc.g-swipe .head,
-.doc.editing .head {
+/* Swipe is always on, so a row's head is never selected or called out, and only scrolls vertically. */
+.doc .head {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
-}
-.doc.g-swipe .head {
   touch-action: pan-y;
 }
 .more-btn,
@@ -1465,13 +1463,7 @@ hr {
   font-weight: 600;
 }
 
-/* long-press lift, drag and drop */
-.node.lifted > .head {
-  background: var(--surface-2);
-  box-shadow: var(--shadow);
-  transform: scale(1.012);
-  transition: transform 0.12s, box-shadow 0.12s;
-}
+/* drag and drop */
 .node.dragging {
   opacity: 0.32;
 }

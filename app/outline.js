@@ -12,8 +12,8 @@ import { edit, canUndo, undo } from "./edits.js";
 import { makeOp, targetArg } from "./ops.js";
 import { attachGestures } from "./gestures.js";
 
-// Which way into editing is being tried (the harness switch `edit`), and whether edit mode is on.
-const editMode = () => state.edit === "mode" && state.editing;
+// Edit mode is on (swipe works with it on or off).
+const editMode = () => state.editing;
 
 const countCache = new WeakMap();
 const countsOf = (hd) => {
@@ -167,9 +167,8 @@ function gestureHooks(file) {
   };
 }
 
-/** The header's way into edit mode (the "mode" variant only): a pencil, then Done and Undo. */
+/** The header's way into edit mode: a pencil, then Done and Undo. */
 export function editToggle() {
-  if (state.edit !== "mode") return null;
   if (!state.editing) return h("button", { class: "btn icon-btn edit-toggle", title: "Edit (E)", "aria-label": "Edit", onclick: () => actions.setEditing(true) }, icon("edit"));
   return [
     h("button", { class: "btn icon-btn", title: "Undo (⌘Z)", "aria-label": "Undo", disabled: !canUndo() || null, onclick: () => undo() }, icon("undo")),
@@ -209,7 +208,7 @@ export function focusedHeading(file) {
 export function renderOutline(file) {
   const ov = overridesFor(file.path);
   const focus = focusedHeading(file);
-  const root = h("article", { class: `doc fold-${state.fold}${focus ? " focused" : ""} g-${state.edit}${editMode() ? " editing" : ""}`, "data-path": file.path });
+  const root = h("article", { class: `doc fold-${state.fold}${focus ? " focused" : ""}${editMode() ? " editing" : ""}`, "data-path": file.path });
   const list = h("div", { class: "nodes" });
   if (focus) {
     if (!ov.has(focus.id)) ov.set(focus.id, "open");

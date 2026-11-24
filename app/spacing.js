@@ -191,6 +191,20 @@ export function predict(rule, cell) {
   return s.total >= MIN_SAMPLES ? s.best : null;
 }
 
+/**
+ * The counted cells as rows, for the spacing report and Diagnostics: [{cell, total, counts:
+ * [[value, n]], rule, share, fallback}]. `rule` is what the rule puts there (null = keep, too few
+ * examples), `share` the majority's percentage, `fallback` the built-in default a kept cell has.
+ */
+export function spacingTable(rule) {
+  return CELLS.map((cell) => {
+    const s = cellSummary(rule, cell);
+    const counts = Object.entries(rule?.cells?.[cell] || {}).map(([v, n]) => [Number(v), n]).sort((a, b) => a[0] - b[0]);
+    const p = predict(rule, cell);
+    return { cell, total: s.total, counts, rule: p, share: p == null || !s.total ? null : Math.round((100 * s.bestCount) / s.total), fallback: DEFAULT_RULE[cell] };
+  });
+}
+
 // ---------------------------------------------------------------- the edge memory
 
 export const START = "^";

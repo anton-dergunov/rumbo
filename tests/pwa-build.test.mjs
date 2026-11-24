@@ -111,6 +111,14 @@ test("the Diagnostics page lives at check/, and the self-hosted fonts are precac
   assert.match(b.read("check/index.html"), /href="\.\.\/manifest\.webmanifest"/);
 });
 
+test("both pages turn off vertical overscroll on the root, so pull-to-refresh can't discard a dialog", () => {
+  const b = freshBuild();
+  for (const css of ["app.css", "check/check.css"]) {
+    const root = [...b.read(css).replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g)].filter((m) => m[1].split(",").some((sel) => /^(html|body)$/.test(sel.trim())));
+    assert.ok(root.some((m) => /overscroll-behavior-y:\s*none/.test(m[2])), css);
+  }
+});
+
 test("the note libraries are precached, and KaTeX's stylesheet names only fonts that ship", () => {
   const b = freshBuild();
   const precache = precacheOf(b.read("sw.js"));

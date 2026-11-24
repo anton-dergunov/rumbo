@@ -1,6 +1,6 @@
 # Rumbo: the real app
 
-*Rumbo* is Spanish for "course, heading, bearing": a plan is a heading to steer by, and Org files are made of headings. It is the new name of Plan Viewer. The repo had no GitHub remote before, so step 0 creates it as `rumbo`; the local folder is renamed after that session. The work is split into sessions, tracked in `NEXT.md` beside this plan.
+*Rumbo* is Spanish for "course, heading, bearing": a plan is a heading to steer by, and Org files are made of headings. It is the new name of Plan Viewer. The repo had no GitHub remote before, so step 0 created it as `rumbo`. The steps of §10 were built in eight sessions, finished on 2026-11-24; their hand-offs are in the git history of `docs/plans/NEXT.md`.
 
 This plan turns the prototype into the app used every day: offline-first, read-write, on the iPad 11" and iPad mini (first), a large Android phone, perhaps an Android e-ink reader, and later the Mac. The look and the editing design are settled (CLAUDE.md, "Settled design"); this document settles how the app is built, deployed and synced, and how it edits without disturbing the files.
 
@@ -330,7 +330,7 @@ Rumbo adopts the Emacs model instead (`agentic-org-planner/lisp/ps-blank-lines-t
   - Why sections apart: a section after its sibling starts a new part (21 of 21 have a blank line), a task after a task almost never does (3 of 2,350).
   - The counts after the review: a blank line before 277 of 277 level-1 headings, 209 of 209 first children after their parent's text, 215 of 215 headings after a closed subtree with notes (6 of 7 without), 21 of 21 sections after a sibling; 3 of 2,405 tasks after a task. Only boundary gaps are counted, never leads. A cell needs at least 5 examples to be used; a tie goes to the built-in default.
 - The built-in default, used before the counts exist, is the rule above.
-- Settings → Diagnostics shows the counted cells (not built yet; `tools/spacing-report.mjs` prints them).
+- Settings → Diagnostics shows the counted cells from the device's replica (`spacingTable` in `spacing.js`, which `tools/spacing-report.mjs` prints too).
 - No spacing setting is stored separately in the app: the vault is the setting.
 
 ### Spacing review
@@ -394,7 +394,7 @@ The agenda shows an icon per task. **Emacs's icons are the source.** A task Emac
 ### Emacs's icons
 Emacs keeps its icons in a cache outside the vault (`~/.cache/ps-task-icons/task_cache.json`).
 
-**A change in `agentic-org-planner`**, briefed in `docs/plans/emacs-task-icons-brief.md`:
+**A change in `agentic-org-planner`** (made 2026-11-24):
 - Whenever the cache changes, Emacs also writes this vault's entries to `<vault>/.ps/task-icons.json`.
 - The file is `{"tag", "inputs", "map"}`, one map entry per line.
 - Emacs's normal sync commits it. `.ps/` is already tracked (`.ps/state.el`).
@@ -406,7 +406,7 @@ Emacs keeps its icons in a cache outside the vault (`~/.cache/ps-task-icons/task
   - `parents` as `org-get-outline-path` gives it: statistics cookies removed, links shown as their description, else their target.
 - Each key in the file is parsed and written again, so JSON escaping never decides a match.
 - `""` means Emacs found no icon. It is an answer, not a gap.
-- `tools/icon-check.mjs` checks the keys against the real cache and vault (29 of 29 on 2026-11-23).
+- `tools/icon-check.mjs` checks the vault's file against the vault and Emacs's cache (29 of 29 keys match, and agree with the cache, on 2026-11-24).
 
 ### The fallback model
 **When:**
@@ -534,6 +534,8 @@ iOS details to carry over from calorie-logger and lectern:
 - detect an iPad from `MacIntel` plus touch points;
 - turn off `overscroll-behavior-y`, because pull-to-refresh can discard an open dialog.
 
+All four are in `app/`: `edit-ui.js` (the keyboard), `gestures.js` (the swipe), `setup.js` and the check page (the iPad), and the root of `app.css` and `check.css` (overscroll).
+
 ## 10. Order of work
 
 0. **Rename to Rumbo:**
@@ -561,6 +563,6 @@ iOS details to carry over from calorie-logger and lectern:
    - the conflict screen, the rescue branch, reset and zip.
 5. **Obsidian notes.**
 6. **Task icons:** the Emacs change (in its own repo) and the on-device fallback model.
-7. **Hardening on the devices.**
+7. **Hardening on the devices:** swipe beside edit mode, the iOS details of §9, the counted cells in Diagnostics, then the owner's round on the devices.
 
 Later, as before: the calendar and time grid, situation views, more settings.

@@ -4,9 +4,11 @@
 //
 //   node tools/icon-check.mjs [--vault DIR] [--cache FILE]
 //
-// 1. Keys: every key in Emacs's icon cache should be the key Rumbo builds for some heading, and
-//    every agenda task Emacs has drawn should find its key. A miss is shown beside the key Rumbo
-//    built for a heading with the same title, so the difference is visible.
+// 1. Keys: every key in the icon file (by default the vault's `.ps/task-icons.json`, which is what
+//    Rumbo reads; `--cache` names another, such as Emacs's own cache) should be the key Rumbo builds
+//    for some heading, and every agenda task with an icon should find its key. A miss is shown
+//    beside the key Rumbo built for a heading with the same title, so the difference is visible.
+//    When Emacs's cache is there too, the vault file's entries are compared with it.
 // 2. Query text: Rumbo's `orgPlain` and `composeQuery` against the Python matcher's, on every task
 //    (needs `uv`; skipped without it).
 
@@ -24,7 +26,8 @@ const repo = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const USAGE = "Usage: node tools/icon-check.mjs [--vault DIR] [--cache FILE]";
 const opt = args(USAGE);
 const ci = process.argv.indexOf("--cache");
-const cacheFile = ci > 0 ? process.argv[ci + 1] : join(homedir(), ".cache", "ps-task-icons", "task_cache.json");
+const emacsCache = join(homedir(), ".cache", "ps-task-icons", "task_cache.json");
+const cacheFile = ci > 0 ? process.argv[ci + 1] : join(opt.root, ".ps", "task-icons.json");
 const matcher = join(homedir(), "projects", "products", "agentic-org-planner", "scripts", "org_task_icon_matcher.py");
 
 const files = readVault(opt.root).map((f) => ({ ...f, doc: parseOrg(f.text) }));
@@ -61,6 +64,11 @@ else {
   const agenda = agendaSections(files).flatMap((s) => s.items);
   const drawn = agenda.filter(({ heading }) => cache.map.has(keyOf(iconTask(heading, inputs))));
   console.log(`   Agenda tasks with a cached icon: ${drawn.length} of ${agenda.length}.`);
+  if (cacheFile !== emacsCache && existsSync(emacsCache)) {
+    const emacs = parseIconFile(readFileSync(emacsCache, "utf8"));
+    const same = keys.filter((k) => emacs.map.get(k) === cache.map.get(k));
+    console.log(`   Against Emacs's cache (tag ${emacs.tag}${emacs.tag === cache.tag ? ", the same" : ", DIFFERENT"}): ${same.length} of ${keys.length} entries agree; Emacs has ${emacs.map.size} in all (other vaults' included).`);
+  }
 }
 
 const py = spawnSync("uv", ["--version"], { encoding: "utf8" });

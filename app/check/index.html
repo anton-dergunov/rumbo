@@ -36,7 +36,7 @@
           <li>Fill in the repos and the token, then <b>Save and run the checks</b>.</li>
           <li>Close the app fully (swipe it out of the app switcher, or it only resumes and no open is recorded), turn on Airplane mode with Wi-Fi off, and open it again from the Home Screen: it should load from the service worker, and the list of opens should say "offline" or "GitHub unreachable" (Android may still say "online"). Copy the report after this step.</li>
           <li>Try the Obsidian link twice: once with Obsidian closed, once with it open. Note what happened.</li>
-          <li><b>Copy the report</b> and paste it into <code>docs/plans/NEXT.md</code>. The report holds no vault text or file names.</li>
+          <li><b>Copy the report</b> and paste it into the session. The report holds no vault text or file names.</li>
         </ol>
       </section>
 
@@ -94,6 +94,16 @@
           <button type="button" id="icon-remove" class="quiet">Remove the model</button>
           <span id="icon-progress" class="muted"></span>
         </p>
+      </section>
+
+      <section>
+        <h2>Blank-line rule</h2>
+        <p class="muted">How many blank lines come before a heading, counted per kind of place from this device's copy of the vault. Rumbo uses the majority for new and moved headings; a place with fewer than 5 examples keeps what is there.</p>
+        <p id="spacing-none" class="muted" hidden></p>
+        <table id="spacing" class="cells" hidden>
+          <thead><tr><th>Place</th><th>Seen</th><th>Blank lines: times</th><th>Rule</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </section>
 
       <section>

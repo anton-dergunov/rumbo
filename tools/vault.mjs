@@ -48,6 +48,7 @@ export function args(usage) {
       process.exit(0);
     } else if (a[i] === "--vault") opt.vault = a[++i];
     else if (a[i] === "--file") opt.file = a[++i];
+    else if (a[i].startsWith("--")) i++; // another tool's own --flag and its value (e.g. icon-check's --cache)
     else if (!opt.vault && !a[i].startsWith("-")) opt.vault = a[i];
   }
   const root = resolveVault(opt.vault);

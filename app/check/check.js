@@ -6,6 +6,9 @@ import { startPwa, onStatus, applyUpdate } from "../pwa.js";
 import { createRemote } from "../remote-github.js";
 import { blobSha, bytesToText } from "../gitobj.js";
 import { isIncluded, SUPPORT_FILES } from "../vault-files.js";
+import { openStore } from "../store.js";
+import { buildModel } from "../data.js";
+import { spacingTable } from "../spacing.js";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -361,8 +364,50 @@ function renderReport() {
     "",
     "Obsidian link:",
     ...manual.map((m) => `  ${m}`),
+    "",
+    `Blank-line rule${spacingRows ? ` (${spacingNote})` : ""}:`,
+    ...(spacingRows ? spacingRows.map((r) => `  ${r.cell}: ${r.total} — ${countsText(r)} — ${ruleText(r)}`) : [`  ${spacingNote}`]),
   ];
   $("#report").value = lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------------------------
+// The blank-line rule (real-app.md §5): the cells counted from the app's own replica, the same
+// numbers the app's edits use. Counts only; no vault text or file names.
+
+let spacingRows = null;
+let spacingNote = "not read yet";
+const countsText = (r) => r.counts.map(([v, n]) => `${v}: ${n}`).join(", ") || "—";
+const ruleText = (r) => (!r.total ? "—" : r.rule == null ? `keep (too few; default ${r.fallback})` : `${r.rule} (${r.share}%)`);
+
+async function spacingCheck() {
+  const store = openStore();
+  try {
+    const records = await store.allFiles();
+    const model = records.length ? buildModel(records) : null;
+    spacingRows = model?.files.length ? spacingTable(model.spacing) : null;
+    spacingNote = spacingRows ? `${model.spacing.files} files` : "No vault on this device yet: set Rumbo up first.";
+  } finally {
+    store.close();
+  }
+  const table = $("#spacing");
+  table.hidden = !spacingRows;
+  $("#spacing-none").hidden = !!spacingRows;
+  $("#spacing-none").textContent = spacingNote;
+  if (spacingRows) {
+    table.tBodies[0].replaceChildren(
+      ...spacingRows.map((r) => {
+        const tr = document.createElement("tr");
+        for (const text of [r.cell, String(r.total), countsText(r), ruleText(r)]) {
+          const td = document.createElement("td");
+          td.textContent = text;
+          tr.append(td);
+        }
+        return tr;
+      }),
+    );
+  }
+  renderReport();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -468,6 +513,12 @@ async function main() {
   $("#icon-run").addEventListener("click", () => iconRun());
   $("#icon-remove").addEventListener("click", () => iconRemove().catch((e) => report("icon-cached", "Task icon model on this device", "fail", errorText(e))));
   iconCachedCheck().catch((e) => report("icon-cached", "Task icon model on this device", "fail", errorText(e)));
+  spacingCheck().catch((e) => {
+    spacingNote = `Couldn't read this device's copy of the vault: ${errorText(e)}`;
+    $("#spacing-none").textContent = spacingNote;
+    $("#spacing-none").hidden = false;
+    renderReport();
+  });
   await storageChecks(opens).catch((e) => report("persist", "Persistent storage", "fail", errorText(e)));
   updateObsidianLink();
 
